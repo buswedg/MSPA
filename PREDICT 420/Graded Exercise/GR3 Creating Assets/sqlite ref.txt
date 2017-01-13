@@ -1,0 +1,18 @@
+import itertools, pandas, pandas.io.sql, sqlite3
+
+conn = sqlite3.connect("data/db_pilot.db")
+
+list_df = [df_customer, df_item, df_mail]
+list_tbl = ["customer", "item", "mail"]
+list_exp = ["customer_exp", "item_exp", "mail_exp"]
+
+for d, t, e in zip(list_df, list_tbl, list_exp):
+    selQuery = "SELECT * FROM " + str(t) 
+    exp_df =  pandas.io.sql.read_sql(selQuery, conn)
+    if "index" in exp_df:
+        exp_df = exp_df.drop("index", 1)
+    
+    exp_file = "data/" + e + ".csv"
+    exp_df.to_csv(exp_file, index = False)
+    
+conn.close()

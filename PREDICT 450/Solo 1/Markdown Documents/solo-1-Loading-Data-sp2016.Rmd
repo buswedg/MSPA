@@ -1,0 +1,129 @@
+---
+title: "Solo 1 #1: Getting the Data, Looking at It"
+output:
+    html_document:
+        toc: true
+---
+_ _ _
+
+Copyright ©2016 Lynd Bacon & Associates, Ltd. DBA Loma Buena Associates.  All Rights Reserved.
+
+Disclaimer:  All content is provided "as is." It's not warranted to be suitable for any particular purpose.
+
+20160321a
+
+_ _ _
+
+### Working directory and files in it
+
+So you've started RStudio.  Do you know what's in your current working directory, or where your working directory is?  Your working directory will be where your sesion's workspace will be stored when you ask to save it.   You can determine what your current working directory is using the `getwd()` command at the command prompt:
+
+```
+>getwd()
+```
+
+Note that you enter this command after the ">" prompt.  What it returns in the R console starts with [1]. R functions return some kind of data structure.  In this case, the command will return the name of your current working directory in a vector that is one element long. [1] is the position of the working directory name in the vector that is returned.
+
+To do the Solo 1 assignment you need to load into R what's in the data file _appHappyData-su2015.RData_ in your working directory (use the command `getwd()` to confirm what it is), either put it there, or change your session's working directory to where this file is as follows.  Or, use the _Set Working Dirctory_ option under the "Session" menu.
+
+Let's assume that you've put the .RData file into your working directory.  Is it in there? You can use the `list.files()` command to see:
+
+```
+>listfiles()
+```
+
+Don't forget that this command is entered at the > prompt.  This command or function will return a vector with file names as strings in it. The numbers in brackets indicate the positions of the file names in the vector.  You could save what this function returns by assigning it a name:
+
+```
+>MyFiles=list.files()
+```
+Now Myfiles is a vector of the names of files in the working directory.  If you simply type at the command prompt:
+
+```
+>MyFiles
+```
+MyFiles will understand that you want it to print itself out if you type its name at the command prompt.  Many "objects" in R know how do something reasonable when you print them, plot them, or ask for various summaries of them.  They are, after all, objects in the object programming sense: they have methods and data.
+
+Note that R syntax is case sensitive, like in Linux and Mac OS X.
+
+This idea of assigning a name to a function's output is fundamental in R.  When you run models, apply functions to data, or do other such things, you save the results by assigning to a name.
+
+MyFiles is a vector, one kind of *data structure* in R.  As with other kinds of data structures, you can access individual elements, or components in it.  Assuming that Myfiles has, say, 5 names in it, you can select the 3rd name in it by doing:
+```
+>Myfiles[3]
+```
+You could select the 2nd and 5th elements of it by:
+```
+>MyFiles[c(2,5)]
+```
+The c(2,5) between the [ ] is just a numeric vector with two elements, the integers 2 and 5:
+
+```
+> c(2,5)
+[1] 2 5
+```
+It picks out the 2nd and 5th elements in MyFiles.  This is an example of an important R concept: you can access data index a data structure by using an *index* to select what you want.   A related concept is *vectorization*: you can apply functions to whole data structures without writing explicit processing loops to do it.  Vectorized operations in R are much faster than operations that explicitly loop over individual data values.
+
+R data structures are just containers for data.  They usually have some *metadata* that provides information about the data in them.  They can be a little hard to grasp at first, but you'll get used to them with some practice.  Other kinds of data structures, or data objects, include data frames, lists, matrices, arrays, and factors.
+
+A very important type of data structure is the *data frame*, which in R is a type, or "class" of data structure called a _data.frame_.  You can find out more about data frames using `help(data.frame)`.  The R data file for Solo 1 has two data frames in it. Next we're going to load them into RStudio.
+
+### Loading an .RData file into your session
+
+Let's get what's in this file into your session.  You can just click on the name of the file in the Files pane.   When you do that you'll likely see a `load()` command generated in the console.   You could have just typed in this command to get the same result.
+
+Now, if you look at the *Environment* pane at the upper right, you should see some items listed under Data. These are data frames.  They should each have 1,663 observations, and 89 variables.
+
+You can also see them in your session's workspace by using the `ls()` command:
+
+```
+>ls()
+```
+The `ls()` command lists R "objects" in the current workspace, like data structures and functions.  ls is a *nix flavor of command, and if you are a Linux or OS X user you may recognize it.  Note that these objects are not the files that are in the current working directory, the files you see by using `list.files()`.
+
+### The data in those data frames
+
+There are two versions of the Solo 1 data, a version coded with the response codes shown in the questionnaire that's in the file apphappy-quex-su2015.pdf, and another version that has the text associated with each numeric response code.  The first version is apphappy.4.num.frame, and the second is apphappy.4.labs.frame.  You may ask, why two versions?  The numeric version of the data will be easier in general to analyze.  The text version can be helpful in making sure that you understand what the numeric codes mean.
+
+Let's take a look at the numeric version of the data.  First, let's give it a nickname that's easier to type:
+
+```
+>num.frame=apphappy.4.num.frame
+```
+We didn't actually rename it, we made a copy of it with the name *num.frame*. 
+
+Data frames, like most other R objectives, have *metadata*.  A data frame is two dimensional: it has rows and columns, and a type, or "class."  The rows have row.names, the column names are simply called "names."
+
+```
+>names(attributes(num.frame))
+```
+All we did here was to ask for the names of num.frame's attributes.  num.frame's class is:
+```
+>class(num.frame)
+[1] "data.frame"
+```
+Variables to be analyzed are typically the columns in a data frame.  Something that makes data frames different from most other kinds of data objects is that the columns can be of different types.  For example, some columns can be character varibles, while others are numeric.
+
+Our data frame num.frame is pretty large:
+```
+>dim(num.frame)
+[1] 1663   89
+```
+It has 1663 rows, which represent App Happy's 1,663 survey respondents, and 89 variables in its columns.
+
+Here are the names of the variables in num.frame.  Review how they relate to the questionniare document:
+
+```
+>names(num.frame)
+```
+There are lots of them, right?  Note that this command produced a vector of names as character strings.   If you look in the Environment tab under Data, you'll note that the data frames listed have a blue arrow in front of their names.  If you click on one of these arrows, it will expand a summary of the data frame that includes the frame's variable names and about 10 values on each variable.
+
+_ _ _
+
+Copyright ©2016 Lynd Bacon & Associates, Ltd. DBA Loma Buena Associates.  All Rights Reserved.
+
+Disclaimer:  All content is provided "as is." It's not warranted to be suitable for any particular purpose.
+
+- - -
+
+

@@ -1,0 +1,255 @@
+* Regression wPCA;
+
+* Principle Component Analysis;
+
+TITLE1 '';
+TITLE2 '';
+
+DATA &data._pca(DROP = &key.);
+	SET &data._trans;
+RUN; QUIT;
+
+PROC CONTENTS DATA = &data._pca OUT = &contents._pca;
+RUN; QUIT;
+
+ODS graphics ON;
+
+PROC PRINCOMP DATA = &data._pca OUT = &data._pca_out
+	PLOTS = scree(unpackpanel) N = 30;
+	ODS OUTPUT eigenvectors = pca_ev;
+RUN; QUIT;
+
+ODS graphics OFF;
+
+PROC TRANSPOSE DATA = pca_ev OUT = pca_ev_trans;
+	ID variable;
+RUN; QUIT;
+
+DATA pca_ev_score;
+	SET pca_ev_trans;
+	_TYPE_ = "SCORE";
+RUN; QUIT;
+
+DATA &data._pca_out;
+	MERGE &data._pca_out &data.(KEEP = &key.);
+RUN; QUIT;
+
+PROC CONTENTS DATA = &data._pca_out OUT = &contents._pca_out;
+RUN; QUIT;
+
+PROC MEANS DATA = &data._pca_out MIN P5 P50 P90 P95 P99 MAX MEAN STDDEV NMISS N;
+RUN; QUIT;
+
+
+* Merge Datasets;
+
+DATA &data._merged;
+	MERGE &data._flag &data._trans &data._pca_out &data.(KEEP = &response.);
+	&response._LN = sign(&response.) * log(abs(&response.)+1);
+	RUN; QUIT;
+
+PROC CONTENTS DATA = &data._merged OUT = &contents._merged;
+RUN; QUIT;
+	
+PROC MEANS DATA = &data._merged MIN P5 P50 P90 P95 P99 MAX MEAN STDDEV NMISS N;
+RUN; QUIT;
+
+
+* Split for Cross-Validation;
+
+TITLE1 '';
+TITLE2 '';
+
+DATA &data._cv;
+	SET &data._merged;
+	IF cmiss(of _all_) then DELETE;
+	U = uniform(123);
+	IF (U < 0.70) then TRAIN = 1;
+		ELSE TRAIN = 0;
+	IF (U > 0.70) then TEST = 1;
+		ELSE TEST = 0;
+	IF (TRAIN = 1) then TRAIN_&response. = &response.;
+		ELSE TRAIN_&response. = .;
+	IF (TEST = 1) then TEST_&response. = &response.;
+		ELSE TEST_&response. = .;
+	IF (TRAIN = 1) then TRAIN_&response._LN = &response._LN;
+		ELSE TRAIN_&response._LN = .;
+	IF (TEST = 1) then TEST_&response._LN = &response._LN;
+		ELSE TEST_&response._LN = .;
+	DROP U;
+RUN; QUIT;
+
+PROC CONTENTS DATA = &data._cv OUT = &contents._cv;
+RUN; QUIT;
+
+PROC FREQ DATA = &data._cv;
+	TABLES train test;
+RUN; QUIT;
+
+PROC FORMAT;
+	VALUE Prediction_Grade (DEFAULT = 7)
+	. = 'Missing'
+	0.0 - 0.05 = 'Grade 0'
+	0.05 <- 0.10 = 'Grade 1'
+	0.10 <- 0.15 = 'Grade 2'
+	0.15 <- high = 'Grade 3'
+	;
+RUN;
+
+
+ODS TRACE ON;
+
+* PCA - Original Response;
+
+PROC REG DATA = &data._cv;
+	MODEL TRAIN_&response. = 
+	Prin1-Prin15
+	/ SELECTION = adjrsq START = 15 STOP = 15 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = pca_orig_train PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA pca_orig_train_res;
+	SET pca_orig_train;
+	res = (TRAIN_&response. - yhat);
+	WHERE res IS NOT missing;
+	abs_res = abs(res);
+	square_res = (res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = pca_orig_train_res mean nway nmiss;
+	VAR abs_res square_res;
+	OUTPUT out = pca_orig_train_em
+	mean(abs_res) = MAE
+	mean(square_res) = MSE;
+RUN; QUIT;
+
+PROC PRINT DATA = pca_orig_train_em;
+RUN; QUIT;
+
+DATA pca_orig_train_ov;
+	SET pca_orig_train;
+	OV = abs(((yhat-TRAIN_&response.)/TRAIN_&response.));
+	Prediction_Grade = put(OV, Prediction_Grade.);
+	IF Prediction_Grade = 'Missing' then DELETE;
+RUN; QUIT;
+
+PROC FREQ DATA = pca_orig_train_ov;
+	TABLES Prediction_Grade;
+	TITLE1 'Operational Validation of &response.';
+RUN; QUIT;
+
+PROC REG DATA = &data._cv;
+	MODEL TEST_&response. = 
+	Prin1-Prin15
+	/ SELECTION = adjrsq START = 15 STOP = 15 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = pca_orig_test PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA pca_orig_test_res;
+	SET pca_orig_test;
+	res = (TEST_&response. - yhat);
+	WHERE res IS NOT missing;
+	abs_res = abs(res);
+	square_res = (res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = pca_orig_test_res mean nway nmiss;
+	VAR abs_res square_res;
+	OUTPUT out = pca_orig_test_em
+	mean(abs_res) = MAE
+	mean(square_res) = MSE;
+RUN; QUIT;
+
+PROC PRINT DATA = pca_orig_test_em;
+RUN; QUIT;
+
+DATA pca_orig_test_ov;
+	SET pca_orig_test;
+	OV = abs(((yhat-TEST_&response.)/TEST_&response.));
+	Prediction_Grade = put(OV, Prediction_Grade.);
+	IF Prediction_Grade = 'Missing' then DELETE;
+RUN; QUIT;
+
+PROC FREQ DATA = pca_orig_test_ov;
+	TABLES Prediction_Grade;
+	TITLE1 'Operational Validation of &response.';
+RUN; QUIT;
+
+
+* PCA - Transformed Response;
+
+PROC REG DATA = &data._cv;
+	MODEL TRAIN_&response._LN = 
+	Prin1-Prin15
+	/ SELECTION = adjrsq START = 15 STOP = 15 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = pca_trans_train PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA pca_trans_train_res;
+	SET pca_trans_train;
+	res = (TRAIN_&response._LN - yhat);
+	WHERE res IS NOT missing;
+	abs_res = abs(res);
+	square_res = (res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = pca_trans_train_res mean nway nmiss;
+	VAR abs_res square_res;
+	OUTPUT out = pca_trans_train_em
+	mean(abs_res) = MAE
+	mean(square_res) = MSE;
+RUN; QUIT;
+
+PROC PRINT DATA = pca_trans_train_em;
+RUN; QUIT;
+
+DATA pca_trans_train_ov;
+	SET pca_trans_train;
+	OV = abs(((yhat-TRAIN_&response._LN)/TRAIN_&response._LN));
+	Prediction_Grade = put(OV, Prediction_Grade.);
+	IF Prediction_Grade = 'Missing' then DELETE;
+RUN; QUIT;
+
+PROC FREQ DATA = pca_trans_train_ov;
+	TABLES Prediction_Grade;
+	TITLE1 'Operational Validation of &response.';
+RUN; QUIT;
+
+PROC REG DATA = &data._cv;
+	MODEL TEST_&response._LN = 
+	Prin1-Prin15
+	/ SELECTION = adjrsq START = 15 STOP = 15 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = pca_trans_test PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA pca_trans_test_res;
+	SET pca_trans_test;
+	res = (TEST_&response._LN - yhat);
+	WHERE res IS NOT missing;
+	abs_res = abs(res);
+	square_res = (res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = pca_trans_test_res mean nway nmiss;
+	VAR abs_res square_res;
+	OUTPUT out = pca_trans_test_em
+	mean(abs_res) = MAE
+	mean(square_res) = MSE;
+RUN; QUIT;
+
+PROC PRINT DATA = pca_trans_test_em;
+RUN; QUIT;
+
+DATA pca_trans_test_ov;
+	SET pca_trans_test;
+	OV = abs(((yhat-TEST_&response._LN)/TEST_&response._LN));
+	Prediction_Grade = put(OV, Prediction_Grade.);
+	IF Prediction_Grade = 'Missing' then DELETE;
+RUN; QUIT;
+
+PROC FREQ DATA = pca_trans_test_ov;
+	TABLES Prediction_Grade;
+	TITLE1 'Operational Validation of &response.';
+RUN; QUIT;
+
+ODS TRACE OFF;

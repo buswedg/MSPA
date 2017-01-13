@@ -1,0 +1,194 @@
+---
+title: "Solo 2 Data Prep"
+output:
+    html_document:
+        toc: True
+---
+
+- - -
+
+&copy; Creative Commons-BY 2015 Lynd Bacon & Associates, Ltd. DBA Loma Buena Associates.
+
+Disclaimer:  All content is provided "as is." It's not warranted to be suitable for any particular purpose.
+
+20150706a
+
+_ _ _
+
+This is a note describing how to prepare your data for analysis.  A good way to proceed is step by step, checking your results as you go. (It's easier to discover mistakes this way.)
+
+For this assignment you will estimate Hierarchical Bayes Multinomial Logit (MNL) regression models.   To estimate your models, you will use the function rhierMnlDP() in the R package “bayesm.”   To use rhierMnlDP() you need to put your data into the required form.   Your preparation will be in two steps.  You will code a matrix of categorical predictor variables representing STC's choice task attributes and levels, and you'll create a list data structure for input to  rhierMnlDP().
+
+To do what follows, you'll need to have the R package “dummies” installed.  You'll also need to have the Solo 2 data sets available and ready to import import into R, and also the R data efCode.RData.  It includes some simple R functions that you'll use to create predictor variables for your regression models.
+
+### Getting the stuff you'll need
+
+Make sure that you have the "dummies" R package installed and attached to your R/RStudio session.
+
+Read into your session the following files:
+
+* stc-cbc-respondents-v6.RData:  this is the respondent data file
+* stb-dc-task-cbc-v6.csv: this file describes the alternatives in each choice set in terms of their attribute levels.  Note that it's a csv file.
+* efCode.RData: this file includes functions you can use for coding the alternatives' attribute levels as predictors in your HB MNL regression models. The functions require that the "dummy" function in "dummies" be available.
+
+The file stc-extra-scenarios-v6.csv includes the choice sets you'll use to predict preference shares for once you have estimated your HB MNL regression models.
+
+### Creating your predictor variables
+
+This is kind of a long, multistep procedure.  THe first thing you're going to do is to "effects code" the attribute levels of the alternatives in the choice sets to get your "X variables."   The matrix of these variables is sometimes called the "design matrix."
+
+If you're unfamiliar with effects coding (you'll need to understand it to do Solo 2), see the .Rmd document effects-coding.Rmd.
+
+The STC DC task whose data you'll be fitting models to has one attribute with four levels or categories, which is brand.  It has four attributes with three levels each: price, RAM, CPU, and screen size.   For the purpose of this assignment (mainly to make things as simple as possible) we're going to treat price as both categorical and continuous, categorical for investigating the effects of price levels per se on stated preference (the price level “main effects” in ANOVA jargon), and as a continuous linear effect to understand how the effect of price on preference may depend on brand.   That is, we want to be able to assess the extent to which brand and price interact in their effects on preference.
+
+You may have used interaction terms in predictive models before.  Interaction terms are just another kind of predictor variable. They allow looking into whether predictor variables “moderate” the effects of other predictor variables.  Interactions can involve more than two predictors.   To estimate interaction effects using DCE data, the task needs to have been designed so as to provide enough information to estimate them.   STC's task was designed so that brand by price interaction effects can be estimated.
+
+First we're going to develop the coding for the attributes per se, the attribute “main effects.” Then we're going to add to these coded predictors some additional predictors that will allow us to estimate brand by price interaction terms. 
+
+### The functions in efCode.RData
+
+You could hand code your X variables. But the functions in efCode.RData will do the coding for you.  The function efcode.att.f() accepts as input a numeric vector, xvec, and produces an effects coded version of it.  This function requires the 'dummies' package.   It uses the dummy()  function in dummies.  It assumes that the lowest value of xvec represents the reference category, the one that's coded with -1's.  You can see what this function does by providing it with some vector input, e.g. xvec=c(0,1,2,3), efcode.att.f(xvec).  
+
+**(Not so) Small Print:** efcode.att.f() and any other R functions or code are provided for your use, but they are not guarranteed to always work correctly.  It's up to you to be sure you understand what they do, and to test them to see if what they produce makes sense. You can modify or extend them if you wish.  You may also what to name the columns of the output matrix to indicate what effect or predictor each respresents.
+
+The function efcode.attmat.f() is a wrapper of sorts for efcode.att.f().  You can provide it with a  a matrix describing your choice design (like a matrix of the attribute columns in stb-dc-task-cbc-v6.csv), and it will produce an effects coded version of it.  As indicated above, it's up to you to make sure you understand what this function is supposed to do and whether it is working correctly for you.
+
+### Getting the "main effect" effects codes for the alternatives' attribute levels
+
+Here's how to use effcode.attmat.f().   Let's assume you have read in the choice task design that it's in __stb-dc-task-cbc-v6.csv__ and that it's in a data frame called "taskV6."  (You need to input the data to create this data frame. Hint: use a function like read.csv() in R.) Select the *attribute columns* in this data frame into a matrix we'll call "task.mat.""  Then, do:
+
+```
+>X.mat=efcode.attmat.f(task.mat)
+```
+
+Your task.mat should have 108 rows, 3 rows for each of the 36 choice questions, or “sets.” X.mat should also have 108 rows.  If it doesn't, then something is wrong.
+
+But if things did work correctly (Horray!),  X.mat is an effects coded version of task.mat.  Check the results to see if it's correct by comparing rows in X.mat to rows in task.mat.  Does it look like the 1's, 0's, and -1's, are in the right places in the rows of X.mat?  In X.mat, each attribute is represented by one less column than it has levels.  For example, RAM size represented by the first two coded columns, the screen attribute is by the next two coded columns, and so on. There should be 11 columns in X.mat.
+
+### Creating brand by price interaction terms
+
+So far we have coded attribute levels in X.mat, but we don't yet have any columns in it that represent the interaction between brand and price.  If we think of price as a continuous variable rather than as categorical here, since it has three values we could estimate linear and quadratic price effects in a regression model. But to keep things simple for this assignment, we're only going to consider brand by linear price interaction terms.   
+
+We're going to create a new price variable that is centered on its mean, and then we are going to multiply it by each of the columns in X.mat that represent the brands.  There are three such columns.   You'll copy these columns into a separate matrix, and then multiply each of them by a vector of the price levels.  You'll then take the resulting three new columns and combine them with X.mat.
+
+First, get the vector of prices from taskV5 and center it on its mean:
+
+```
+>pricevec=taskV6$price-mean(taskV6$price)
+```
+Note that the R scale() function could be used to do this, scale(taskV5$price,scale=FALSE), but the above is more transparent.  Note also that the above is taking the elementwise difference of two numeric vectors.  Check to make sure your results are correct.
+
+Next, we'll get the columns from X.mat that represent brand.  They should be the last three columns (check to be sure of this):
+
+```
+>X.brands=X.mat[,9:11]
+```
+
+Next, we're going to multiply each column in X.brands by pricevec.  This isn't matrix multiplication.  It's taking the inner product of each column and pricevec:
+
+```
+>X.BrandByPrice = X.brands*pricevec
+```
+Check this result.  Try it first by multiplying a single X.brands column and pricevec.
+
+Now we'll combine X.mat and X.BrandsByPrice to get the X matrix we'll use for choice modeling:
+
+```
+>X.matrix=cbind(X.mat,X.BrandByPrice)
+```
+This combines the columns of X.mat and X.BrandByPrice. Check your result, of course. Do you have 108 rows and 14 columns in X.matrix?
+
+### Welcome to the Matrix
+
+One way to see if your X matrix coding isn't seriously flawed is to premultiply X.matrix by its transpose, and then then to look at the determinant of the result.  The transpose of X is X with its rows and columns reversed.  The “t” in the following command means take the transpose. X premultiplied by its transpose is a square matrix, it has the same number of rows as columns.  Without getting too detailed here, the determinant of a square matrix is the product of its eigenvalues.  In any case, if in R you do:
+
+```
+>det(t(X.matrix)%*%X.matrix)
+```
+
+You should get a positive number, maybe a very big one.  If you don't, go back through the steps above and check your results one step at a time.
+
+Note that the %*% above means matrix multiplication in R.  See for example, 
+
+https://en.wikipedia.org/wiki/Matrix_multiplication
+
+That's your “linear algebra moment” for today.  Welcome to The Matrix.
+
+### Your Y (dependent variable) data
+
+So now you have your X, or design, matrix, X.matrix, for doing some regression modeling. Next, you need to get the responses that STC's survey participants provided to the 36 choice questions they answered.  The are in the data frame resp.data.v5mod that's in the R data file stc-cbc-respondents-v6.RData.  The variable names are CS1 through CS36.  They are probably the 3rd through the 38th variables in resp.data.v5mod.
+
+Let's get these responses out into their own data frame:
+
+```
+>ydata=resp.data.v5mod[,3:38]
+```
+Check to see if you have all 36 response variables:
+
+```
+>names(ydata)
+```
+
+Make sure you have no missing data:
+
+```
+>ydata=na.omit(ydata)
+```
+
+Now, convert ydata to a matrix:
+
+```
+> ydata=as.matrix(ydata)
+```
+
+### Prior ownership and gender covariates
+
+For one of the assignment's objectives (and your 2^nd^ MNL model) you'll need two “covariates” (these are variables, of course) that indicate whether a survey respondent has owned a STC product, and what his or her gender is.   There's a variable in the respondent data set called STCowner.   Recode this into a variable that is equal to 1 if a respondent has ever owned an STC product.  Otherwise, make it equal to zero.  In what follows I'll call this variable "zowner."  There is also a gender variable called Gen.  Recode this variable to be 1=Female, and 0=Male.  We'll call this new variable "gender."
+
+### Creating the must-have data structure
+
+Now for some real fun.  We have our X matrix cleverly called “X.matrix”, our choice responses (they're in ydata), zowner, our covariate for STC product ownership, and gender, our gender covariate.   The next thing to do is to make the data structure you'll use as input to the bayesm package function rhierMnlDP(), which is what you'll use to estimate your HB MNL models.  See help(rhierMnlDP) in R after you have attached bayesm with the library() command.
+
+rhierMnlDP(), like some other functions in bayesm, takes its data in “lists.” 
+See help(list).  Lists are a type of data structure that can be found in a number of programming environments and languages.  The lists that rhierMnlDP() wants include a list with a scalar (single number) indicating the number of alternatives in each choice set and the number of MCMC algorithm iterations to run, a list that contains lists with the X.matrix and y (response) data in it, and optionally, some data on covariates (zowner and gender, here).
+
+Let's make the list of data lists, first.  We're going to call it lgtdata to be consistent with the documentation for rhierMnlDP().   lgtdata is a list of data for each respondent.  Its length equals the number of respondents.  (Lists have length.)  The data for each respondent is a list with two elements, X.matrix and the respondent's choice responses, from their row in ydata. So, lgtdata is a list of lists.
+
+Here's how you can create  lgtdata:
+
+```
+> lgtdata = NULL # a starter placeholder for your list
+> for (i in 1:360)  { # 360 should be the number of respondents w/o NA's
+>	lgtdata[[i]]=list(y=ydata[i,],X=X.matrix)
+>  }
+```
+Note that for the above code to work, you need to have the brackets correct.  It's all case sensitive too, of course.  That “X” is upper case X.  “y” is lower case y. That's [i,] (space after the comma) in the last line of code.
+
+Assuming that the above code runs without errors, you can check to see whether lgtdata has the correct length:
+
+```
+>length(lgtdata)
+```
+
+The length should be 360, the number of respondents you have.
+
+Next, you can look at data in lgtdata.   If you wanted to look at the data for the 3rd respondent, for example, you could do:
+
+```
+> lgtdata[[3]]
+```
+
+Those are double square brackets.  You should get the 3^rd^ respondent's choices, which will be 1's, 2's, and 3's, in a vector y.  You should also get an X that's your X.matrix.  The X matrix is the same for all respondents, because all respondents where presented with the same choice sets. (Although not necessarily in the same order.)  
+
+When you run rhierMnlDP(), you'll provide it with lgtdata and some other information, like zowner and gender, when you estimate your second MNL model.   We'll be putting those pieces together in our Sync sessions, in some additional notes, and in our discussions in the Solo Huddle.
+
+- - -
+
+&copy; Creative Commons-BY 2015 Lynd Bacon & Associates, Ltd. DBA Loma Buena Associates.
+
+Disclaimer:  All content is provided "as is." It's not warranted to be suitable for any particular purpose.
+
+20150706a
+
+_ _ _
+

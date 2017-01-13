@@ -1,0 +1,4 @@
+Native Data Type,Pandas Data Type,Class,Description
+int,int64,Numeric types,Integers
+float,float64,Numeric types,Floating-point numbers
+str,object,Sequences,String

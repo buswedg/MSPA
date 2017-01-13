@@ -1,0 +1,95 @@
+---
+title: "Apply and Using Functions in R"
+output: 
+  html_document:
+    toc: True
+---
+
+- - -
+
+Copyright ©2016 Lynd Bacon & Associates, Ltd. DBA Loma Buena Associates.  All Rights Reserved.
+
+Disclaimer:  All content is provided "as is." It's not warranted to be suitable for any particular purpose.
+
+20160321a
+
+_ _ _
+
+### The apply() method and its relatives
+
+R provides several useful and efficient ways to process data without using explicit loops, which are relatively slow in execution in R.  The apply() method and its cousins tapply(), sapply(), and lapply() allow you to apply functions and transformations to data in structures like matrices, arrays, and data frames without any do'ing, for'ing, or while'ing.  Here's an example of using apply() to calculate statistics for columns in a data frame in order to look for largest differences or effects across groups.  This is something you might find handy while doing the Solo 1 assignment.
+
+We're doing some 'cheesy' statistics here.  By that I mean we're going to calculate some statistics just for the purpose of doing a first sort on different variables in terms of how much their data might vary across groups, keeping in mind that our results may not be totally valid because we might be violating some assumptions about how things are distributed and the like. Cheesy, but practically cheesy.
+
+### Some example data
+
+Let's assume that you have a data frame of numeric data like for the 40 Likert scaled ratings in App Happy's segmentation data set, and that they are in an R data frame called _att.frame_.  Let's assume also that we have classified each of the respondents in this data frame into one of three classes, or "segments," based on doing cluster analysis.  These class memberships have labels 1, 2, or 3, and are in a vector called _att.class_, which is an R _factor_, a type of variable that has some finite number of categories, that may be ordered or unordered, and that may have category names or labels. att.class is an unordered factor.
+
+### Level of measurement, and _what_ statistic?
+
+You may remember our discussion about S.S. Steven's levels of measurement, and whether Likert ratings are ordinal or interval measures.  Which one they are is mostly a matter of what you feel you can assume and justify. For our purposes here we're going to consider both.  First we're going to treat the ratings data as continuous, and we're going to assume that the key general linear regression model (glm) assumptions are approximately met.  Then we're going to assume that the data are categorical, but just nominal, and we'll apply the $\chi^2$ (chi square) statistic to two-way frequency tables of ratings by class in _att.class_.  In each case, chunky or smooth ratings data, we're going to use the values in _att.class_ to define groups we want to compare on each variable in att.frame.
+
+### Continuous data, and (we hope) normally distributed regression errors.
+
+We want to use apply() to _apply_ a function, glm(), to each column of att.frame, and to return a measure of how well the class memberships in att.class predict the ratings in each column.  The measure we're going to return is the _Akaike Information Criterion_, "aic," an information-theoretic, log-likelihood-based measure of model fit.  The smaller the value of the aic, the better a model predicts the dependent variable.  If you do `help(glm)` you'll see that aic is one of the statistics returned by glm(). See [AIC on Wikipedia](https://en.wikipedia.org/wiki/Akaike_information_criterion).
+
+First we need to define this function with glm() that we're going to apply. Here's some code:
+
+    apply.glm.f=function(y,class){return(glm(y~class)$aic)}
+
+`apply.glm.f()` is a function with two arguments, y and class.  y is data on a continuous numeric dependent variable, and class is a predictor variable.  If we define class to be _att.class_, it will be a categorical predictor.  (R is kind of smart in this way.)  R will code the levels of a categorical predictor in an appropriate way, using the first category as the reference level by default.
+
+Note that a function in R is defined like:
+
+    function(args){code and data}
+
+"args" are any arguments passed to the function, which may be key/value pairs. The function's code and any data local to it are enclosed by curly braces, { }.  
+
+Using an ".f" at the end of a function's name is just a habit I got into over years of using S and R at the command prompts in terminal sessions. I could find all the functions in my session by using the command `ls(pat='.f$')` Life is a lot easier now using an IDE like RStudio.  You can name your functions and other objects in R however it suits you.
+
+Now that we have this function, we can apply it to att.frame and save the results as a vector named "item.aic:"
+
+    item.aic=apply(att.frame,2,apply.glm.f,class=att.class)
+
+The arguments given to apply() here are:
+
+* data structure to use: att.frame
+* "margin" of the data structure to apply the function to: 2 = columns (a 1 would be rows)
+* function to apply: apply.glm.f
+* additional argument to be passed to the function to be applied: att.class
+
+item.aic is a numeric vector with labelled elements.  Print it out by typing `item.aic` at the R command prompt.  The smaller that aic is, the more predictive att.class is, i.e. the larger the differences in mean rating across the classes.  You can sort item.aic:
+
+    sort(item.aic)
+
+The result is sorted from smallest to largest aic value.  Assuming that the glm model is approximately correct as applied to the variables in att.frame, this sort orders the items from the largest differences across classes to the smallest differences across classes.
+
+Note that a small aic doesn't mean that the differences on a variable are interesting in any substantive way, e.g. that they are useful for market segment profiling.  To discern whether differences are useful to know about, you need to look more closely at them.
+
+### Categorical data
+
+Let's assume that Likert scaled ratings data are categorical instead of continuous.  Instead of looking for differences between classes using glm results, we can use apply() to return the estimated probability of a $\chi^2$ statistic computed on two-way tables where each table is a cross-tabulation of ratings category by att.class.
+
+So, here we go.  First we need the function to be applied to the variables in att.frame:
+
+    sim.chisq.pval.f=function(x,class){return(chisq.test(x,class,rescale.p=TRUE,simulate.p.value=TRUE)$p.value)}
+    
+x in this call will be the rows in a table, and class will be the columns.  The chisq.test() function calculates the $\chi^2$ and some other results, and we return from it the estimated probability that a $\chi^2$ as large or larger would be returned by chance if the rows and columns of the tabulated results were unrelated, i.e. if the cells in the table could be predicted from the row and column marginal distributions.  The other arguments to chisq.test you can learn about by using `help(chisq.test)` in R.
+
+So, now to apply this function to att.frame:
+
+    item.chi.p=apply(att.frame,2,sim.chisq.pval.f,class=att.class)
+    
+The smaller the estimated probability in item.chi.p, the less likely an estimated $\chi^2$ value is given chance, and the more strongly a table's rows and columns are related.  Note that like with our use of glm and the aic, above, an estimated probability for a $\chi^2$ being small doesn't mean that the differences in rating response distributions across classes are substantively interesting or important.
+
+There you have it.
+
+- - -
+
+Copyright ©2016s Lynd Bacon & Associates, Ltd. DBA Loma Buena Associates.  All Rights Reserved.
+
+Disclaimer:  All content is provided "as is." It's not warranted to be suitable for any particular purpose.
+
+_ _ _
+
+

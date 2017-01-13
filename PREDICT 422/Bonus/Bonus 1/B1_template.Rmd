@@ -1,0 +1,99 @@
+---
+title: "Bonus Assignment 1"
+subtitle: "MSPA PREDICT 422-DL-56 LEC"
+author: "Darryl Buswell"
+output: 
+  pdf_document:
+    fig_caption: no
+    keep_tex: yes
+    pandoc_args: [
+      "--template=B1_template.latex"
+    ]
+---
+
+# 1 Introduction
+
+This document presents results of the first bonus assessment for the Masters of Science in Predictive Analytics course: PREDICT 422. This assessment required the student to perform cluster-wise regression for automobile data from the rpart package.
+
+# 2 Bonus Assessment
+
+## 2.1 Load the Dataset
+
+As a first step, we load the 'car.test.frame' data from the rpart package and observe the structure of the data.
+
+```{r, include=FALSE}
+for(package in c("rpart",
+                 "flexmix")) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos="http://cran.us.r-project.org")
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+```
+
+```{r, include=FALSE}
+cartest.raw <- car.test.frame
+
+#summary(cartest.raw)
+str(cartest.raw)
+```
+
+We can see that the dataset includes a number of numeric and factor type variables:
+
+- Price: a numeric vector giving the list price in US dollars of a standard model
+- Country: of origin, a factor with levels France, Germany, Japan , Japan/USA, Korea, Mexico, Sweden and USA
+- Reliability: a numeric vector coded 1 to 5
+- Mileage: fuel consumption miles per US gallon, as tested.
+- Type: a factor with levels Compact Large Medium Small Sporty Van
+- Weight: kerb weight in pounds
+- Disp.: the engine capacity (displacement) in litres
+- HP: the net horsepower of the vehicle.
+
+'Price' will be our response variable, whilst 'Mileage', 'Weight', 'Disp', 'HP' will form our set of predictor variables.
+
+## 2.2 Model Fit: Single Cluster
+
+For this assessment, we leverage the FlexMix package in order to perform cluster-wise regression. FlexMix implements a general framework for finite mixtures of regression models, with parameter estimation being performed using the EM algorithm. We first fit a cluster-wise regression using a single cluster (the full set of observations). The model fit is shown below.
+
+```{r, echo=FALSE}
+m1 <- flexmix(Price ~ Mileage + Weight + Disp. + HP, 
+              data=car.test.frame, k=1)
+
+summary(m1)
+```
+
+We can also observe the parameter estimates over the cluster by using the 'parameters' function.
+
+```{r, echo=FALSE}
+parameters(m1, component=1)
+```
+
+We note the polarity of the majority of coefficients estimate seems reasonable, with an increase in fuel consumption translating to a decrease in price, or an increase in horse power resulting in an increase in price. The weight and displacement variables are more difficult to justify however.
+
+## 2.3 Model Fit: Two Clusters
+
+We can repeat this exercise by refitting the cluster-wise regression with two clusters. The model fit is shown below.
+
+```{r, echo=FALSE}
+set.seed(1)
+m2 <- flexmix(Price ~ Mileage + Weight + Disp. + HP, 
+              data=car.test.frame, k=2)
+
+summary(m2)
+```
+
+We can see that the dataset has been broken into two samples of 46 and 14 observations in length. We note the improvement in AIC and BIC values reported for the above model versus the single cluster model previously fit.
+
+Again, we can also observe the parameter estimates over both clusters by using the 'parameters' function.
+
+```{r, echo=FALSE}
+parameters(m2, component=1)
+```
+
+```{r, echo=FALSE}
+parameters(m2, component=2)
+```
+
+We can see that although the polarity of coefficient is consistent over both clusters, the magnitude of those coefficients does have some variation.

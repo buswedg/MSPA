@@ -1,0 +1,51 @@
+---
+title: "Starting to look at the attitudinal data"
+output: 
+    html_document:
+        toc: true
+---
+_ _ _
+Copyright ©2016 Lynd Bacon & Associates, Ltd. DBA Loma Buena Associates.  All Rights Reserved.
+
+Disclaimer:  All content is provided "as is." It's not warranted to be suitable for any particular purpose.
+
+20160321a
+
+_ _ _
+
+### Checking out the attitudinal data
+
+Solo 1 tasks you with doing a post hoc descriptive segmentation analysis.  To do it the first thing you'l be doing is cluster analyses on the data for q24, q25 and q26, the 40 Likert-scaled questionnaire items.  You'll chose some or all of these variables to be your segmentation *basis variables*.  To get started you'll want to get a look at this ratings data, check to to see whether there are missing values, describe how they are distributed, and do other such things that you'd normally do before using any more advanced statistical methods. 
+
+### What's missing?
+
+ A good first step is to check for missing data, since whether there are any is important to know.  And if there are any, how they might have come about could make dealing with them appropriately challenging.
+
+A quick way to see whether any attitudinal data are missing is to compare the sizes of the att.frame before and after dropping any records (rows of data) with one or more missing values.  The function `na.omit()` makes this comparison easy because it returns an object after having deleted elements with missing values:
+
+```
+>dim(att.frame)
+>dim(na.omit(att.frame))
+```
+You can see that att.frame and na.omit(att.frame) have the same number of rows.  The number of rows is the first element of `dim()`.  The second number is the number of columnns.
+
+In R, a missing value is represented by `NA`, like for "not available."
+
+So far, so good.  It's handy that the data you'll be clustering on is complete as it will make merging your clustering results with the rest of the data easier. You'll need to do this to profile your segments.
+
+### Next step: describing your basis variable data
+
+A good next step would be to take a look at how your basis variables are distributed.  As you proceed on your exploratory analysis of your variables, you might find it useful to first take a look at Chapter 3 in Chapman and Feit's book.  It summarizes ways of describing data in R.
+
+Don't forget that it's up to you to decide which of the attitudinal measures you should use for your basis variables, some of them or all of them.
+
+_ _ _
+Copyright ©2016 Lynd Bacon & Associates, Ltd. DBA Loma Buena Associates.  All Rights Reserved.
+
+Disclaimer:  All content is provided "as is." It's not warranted to be suitable for any particular purpose.
+
+_ _ _
+
+
+
+

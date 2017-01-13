@@ -1,0 +1,204 @@
+*///logit_insurance is the insurance training data with 8000+ records///;
+*///This program creates some new variables runs proc logistic to
+     find new models merges two files(probability and amount) for testing 
+		data and gives code for lift chart
+	  plus gives code for probit model in case you want to run that too///;
+*///input files mydata.logit_insurance  this is the training data///;
+*/// 		    mydata.logit_insurance_test  this is the testing data///;
+*///output files mydata.demo_ins_prob  prob for test data///;
+*///             mydata.demo_ins_amt  amt for test data///;
+*///result file  mydata.demo_ins  merge of prob and amt  ///;
+ 
+*///Do some EDA///;
+proc contents data=mydata.logit_insurance;
+run;
+
+proc print data=mydata.logit_insurance(obs=10);
+run;
+
+proc means data=mydata.logit_insurance(drop=INDEX) nmiss mean median max min ndec=0;
+run;
+*///do some plots and correlations///;
+
+*///see if there are missing values for some of the class variables///;
+proc freq data=mydata.logit_insurance(drop=INDEX )  ;
+   tables car_type car_use education homekids job kidsdriv mstatus mvr_pts  
+   parent1 red_car revoked sex tif travtime urbanicity /   missing;
+run;
+
+*///build the dataset that you will use for training///;
+*///fix missing values define new vars etc///;
+data one;
+   set mydata.logit_insurance;
+   if car_age = "." then car_age = 8;
+   if home_val = "." then home_val = 161160;
+   if income = "." then income = 54028;
+   if job = "." or job = " " then job = "z_Blue Collar";
+   if yoj = "." then yoj = 11;
+run;   
+   
+
+*///do some boxplots///;
+proc sgplot data=one;
+  vbox  age  /group=target_flag;
+  xaxis label="Crash";
+  keylegend / title="BoxPlot";
+run;
+
+*///build the dataset that you will use for testing///;
+*///fix missing values define new vars etc///;
+data testdata;
+   set mydata.logit_insurance_test;
+   if car_age = "." then car_age = 8;
+   if home_val = "." then home_val = 161160;
+   if income = "." then income = 54028;
+   if job = "." or job = " " then job = "z_Blue Collar";
+   if yoj = "." then yoj = 11;
+run;
+  
+*///run a model using several choices for variables etc///;
+*/note this code creates two output datasets pred will contain predicted values for training data///;
+*///insmodel will contain the parameters for the model and can be used to score the test file///;
+proc logistic data=one outmodel=insmodel plots(only)=roc  ;
+   class car_type (param=ref) car_use (param=ref) education (param=ref) job (param=ref)
+     mstatus (param=ref) parent1 (param=ref) red_car (param=ref) urbanicity (param=ref);
+   model target_flag(event='1')=car_type car_use education job mstatus parent1 red_car urbanicity
+     age bluebook car_age clm_freq homekids home_val income kidsdriv mvr_pts oldclaim tif 
+     travtime yoj  
+       / selection=backward sls=.05 include=0 link=logit  ;
+   output out=pred p=phat  ;
+run;
+
+*///use sas code to score the model you also need to write a sas data step to score the model///;
+*///it is OK to copy and paste the SAS output showing the model parameters and bypass 
+the data step just make sure you explain the model and parameters///;
+
+proc logistic inmodel=insmodel;
+   score data=testdata out=testscore;
+run;
+*///create the file in a saved library for your results///;
+data mydata.demo_ins_prob;
+   set testscore;
+   p_target_flag= p_1;
+   keep index p_target_flag;
+run;
+*///take a look at the file///;
+proc print;
+run;
+
+*///just a demo file next to complete the example///;
+*///part of your assignment is to build another model here for p_target_amt///;
+data mydata.demo_ins_amt;
+   set testscore;
+   p_target_amt = 1000;
+   keep index p_target_amt;
+run;
+
+*///next build regression model to predict p_target_amt in file named mydata.demo_ins_amt///;
+*///merge the two files using index as the by variable///;
+
+data mydata.demo_ins;
+merge mydata.demo_ins_prob(in=ina) mydata.demo_ins_amt(in=inb);
+by INDEX;
+if ina;
+run;
+
+*///finally do a lift chart for the logistic model with the training data///;
+*/// To create the lift chart run this exact code///;
+*///just in case you don't remember how to do this from 410///;
+*/// The descending option assigns the highest model scores to the lowest score_decile///;
+proc rank data=pred out=training_scores descending groups=10;
+var phat;
+ranks score_decile;
+run;
+
+proc means data=training_scores sum;
+class score_decile;
+var target_flag;
+output out=pm_out sum(target_flag)=Y_Sum;
+run;
+
+proc print data=pm_out; run;
+
+data lift_chart;
+	set pm_out (where=(_type_=1));
+	by _type_;
+	Nobs=_freq_;
+	score_decile = score_decile+1;
+	
+	if first._type_ then do;
+		cum_obs=Nobs;
+		model_pred=Y_Sum;
+	end;
+	else do;
+		cum_obs=cum_obs+Nobs;
+		model_pred=model_pred+Y_Sum;
+	end;
+	retain cum_obs model_pred;
+	
+	* 2148 represents the number of successes; 
+	* This value will need to be changed with different samples;
+	pred_rate=model_pred/2148; 
+	base_rate=score_decile*0.1;
+	lift = pred_rate-base_rate;
+	
+	drop _freq_ _type_ ;
+run;
+
+proc print data=lift_chart; run;
+
+title 'Your Lift Chart';
+proc sgplot data=lift_chart;
+   series x=base_rate y=base_rate;
+   series x=base_rate y=pred_rate;
+run;
+
+*///Univ Ed will not do proc gplot///; 
+title 'Your Lift Chart';
+ 
+proc sgplot data=lift_chart;
+   series x=base_rate y=base_rate;
+   series x=base_rate y=pred_rate;
+run;    
+
+*///in case you would like to try probit///;
+*///sas code for probit///;
+proc logistic data=one outmodel=prob_insmodel ;
+   class car_type (param=ref) car_use (param=ref) education (param=ref) job (param=ref)
+     mstatus (param=ref) parent1 (param=ref) red_car (param=ref) urbanicity (param=ref);
+   model target_flag(event='1')=car_type car_use education job mstatus parent1 red_car urbanicity
+     age bluebook car_age clm_freq homekids home_val income kidsdriv mvr_pts oldclaim tif 
+     travtime yoj  
+       / selection=backward sls=.05 include=0 link=probit  ;
+   output out=prob_pred p=phat  ;
+run;
+
+*///might as well score this model too///;
+proc logistic inmodel=prob_insmodel;
+   score data=testdata out=testscore;
+run;
+data mydata.prob_ins_prob;
+   set testscore;
+   p_target_flag= p_1;
+   keep index p_target_flag;
+run;
+*///take a look at the file///;
+proc print;
+run;
+
+ 
+data mydata.prob_ins_amt;
+   set testscore;
+   p_target_amt = 1000;
+   keep index p_target_amt;
+run;
+
+ 
+
+data mydata.probit_ins;
+merge mydata.prob_ins_prob(in=ina) mydata.prob_ins_amt(in=inb);
+by INDEX;
+if ina;
+run;
+
+*///if you want to submit both logit and probit files to be scored we will run both///;

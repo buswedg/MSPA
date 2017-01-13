@@ -1,0 +1,76 @@
+---
+title: 'Solo 3 data management: selecting and filtering cases'
+output: 
+    html_document:
+        TOC: True
+---
+
+- - -
+
+&copy; Creative Commons-BY 2015 Lynd Bacon & Associates, Ltd. DBA Loma Buena Associates.
+
+Disclaimer:  All content is provided "as is." It's not warranted to be suitable for any particular purpose.
+
+20150729a
+
+_ _ _
+
+The Solo 3 assignment requires subsetting the customer data in various ways, e.g. selecting customers who were targeted by XYZ in their 16^th^ (most recent) campaign, and then randomly splitting these into model estimation and test subsamples.
+
+Let's assume that you are going to use the R data set `XYZ_complete_customer_data_frame.RData` for this assignment, and that you have loaded it into an R session where it will have the default name `complete.customer.data.frame`.  That's a long name, so let's make a copy of it called `cust.frame` to make things easier:
+```
+> cust.frame=XYZ_complete_customer_data_frame
+```
+The ">" is the R console command prompt, of course.
+
+For response modeling purposes, you want to select customers from this data frame who were mailed during the 16^th^ campaign.  These are customers for whom the variable *ANY_MAIL_16* is equal to 1.  So one way to extract these customers from cust.frame is to select those for whom this variable is equal to 1 into a new data frame:
+```
+> cust16.frame=cust.frame[cust.frame$ANY_MAIL_16==1,]
+```
+This data frame should have only customers with ANY_MAIL_16 equal to 1.  You can check on this, of course.
+
+Another way to work with data frames and other data structures is to use the package `dplyr.`  You can install it from your favorite R mirror.  To use it you need to make it available in your R session:
+```
+> library(dplyr)
+```
+There's a vignette for this package:
+```
+> vignette("introduction", package='dplyr')
+```
+One of the several data manipulation functions `dplyr` provides is `filter()`, which is used for selecting a subset of rows.  To use it to select the customers mailed to in the 16^th^ campaign, you could do:
+```
+> cust16.frame=filter(cust.frame,ANY_MAIL_16==1)
+```
+The last argument there in `filter()` after the comma is a logical test: if the variable is equal to 1, the row will be extracted into cust16.frame.  You can include multiple conditions: an "and" between conditions is indicated by a comma, and an "or" by the vertical, or pipe, symbol, |. 
+
+`dplyr` has many other functions and capabilities, like for selecting columns or adding new ones, applying functions to grouped data, sampling rows, and using some SQL-like merge and join operations. It also provides a "chaining" of operations capability, which give it some "data flow" functionality like the Pig languaged used in conjunction with Hadoop.
+
+Once you have this data frame of customers you'll use for predicting RESPONSE16, you'll want to randomly split them into estimation and test subsamples. Here again there are a couple of ways to do this.  One way would be to randomly permute the customer records in cust16.frame, and then to split them based on row numbers.  
+
+For example, suppose that you have N rows in cust16.frame, and you want two random subsets of this data frame, where one subset is about m/N of the records, and the other is 1-(m/N) of them.  Let's say that we have N=15000, and m/N =9750, or 65% of N.  Then you could do:
+```
+> cust.order=sample(1:15000,replace=FALSE) # 1 through 15000 random permute
+> cust16reord.frame=cust16.frame[cust.order,] # rows randomly reordered
+> cust16estim.frame=cust16reord.frame[1:9750,] # first 9750 for estimation
+> cust16test.frame=cust16reord.frame[9751:15000,] # last 5250 used for test
+```
+Another way to do this is to generate a sequence of random draws from a uniform distribution, and then to use it to randomly split cust16.frame:
+```
+> randraw=runif(15000)  # 15000 numbers in [0,1]
+> cust16estim.frame=cust16.frame[randraw<=0.65,]
+> cust16test.frame=cust16.frame[randraw>0.65,]
+```
+Either method uses draws from a random number generator, so if you want your results to be reproducible, you need to call `set.seed()` with a fixed numeric value as an argument before using `sample()`, `runif()`, or any other function that uses R's random number generator.  See `help(set.seed)` for information.
+
+Now that you have separated out XYZ customers who were targeted in XYZ's 16^th^ campaign, and you have randomly split them into estimation and test subsamples for model fitting and validation purposes, your big challenge awaits you: selecting predictor variables and building models with the greatest out-of-sample predictive accuracy you can effectuate.
+
+- - -
+
+&copy; Creative Commons-BY 2015 Lynd Bacon & Associates, Ltd. DBA Loma Buena Associates.
+
+Disclaimer:  All content is provided "as is." It's not warranted to be suitable for any particular purpose.
+
+20150729a
+
+_ _ _
+

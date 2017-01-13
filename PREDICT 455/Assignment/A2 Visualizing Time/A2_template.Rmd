@@ -1,0 +1,571 @@
+---
+title: "Visualizing Time"
+subtitle: "MSPA PREDICT 455-DL-SEC55"
+author: "Darryl Buswell"
+output: 
+  pdf_document:
+    fig_caption: no
+    keep_tex: yes
+    pandoc_args: [
+      "--template=A2_template.latex",
+      "--bibliography=A2_template.bib"
+    ]
+---
+
+\newpage
+
+# 1 Introduction
+```{r, include=FALSE}
+for(package in c('xlsx')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+list_dfs <- c('raw_oecd_petrol_cons',
+              'raw_oecd_petrol_stock',
+              'raw_opec_crudeoil_prod',
+              'raw_us_crudeoil_price',
+              'raw_us_petroleum_rig',
+              'raw_us_primenrg_prod',
+              'raw_us_totalenrg_cons')
+
+list_eiamonthlydata.raw <- list()
+list_eiaannualdata.raw <- list()
+
+j <- 1
+for(d in list_dfs) {
+  f <- paste0('data/', d, '.xlsx')
+  print(f)
+  list_eiamonthlydata.raw[[j]] <- read.xlsx(f, sheetName='monthly', stringsAsFactors=FALSE)
+  list_eiaannualdata.raw[[j]] <- read.xlsx(f, sheetName='annual', stringsAsFactors=FALSE)
+  j <- j+1
+}
+
+rm(f, j, d)
+
+
+# Print column names/class
+j <- 1
+for(d in list_eiamonthlydata.raw) {
+  print(paste0('dataframe ', j, ': ', list_dfs[j]))
+  print(sapply(d, class))
+  print(' ')
+  j <- j+1
+}
+
+j <- 1
+for(d in list_eiaannualdata.raw) {
+  print(paste0('dataframe ', j, ': ', list_dfs[j]))
+  print(sapply(d, class))
+  print(' ')
+  j <- j+1
+}
+
+rm(j, d)
+```
+
+This assignment explores trends in demand and supply for sources of energy, with a particular focus on the U.S. crude oil market. All datasets presented as part of this assessment have been obtained from the U.S. Energy Information Agency [@eia], with each in timeseries format with either an annual or weekly frequency.
+
+#2 Data Exploration
+```{r, include=FALSE}
+for(package in c('reshape', 'ggplot2')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+df_temp <- list_eiaannualdata.raw[[6]] # raw_us_primenrg_prod
+
+for(c in colnames(df_temp)){ print(paste0(c, ': ', sum(is.na(df_temp[, c])))) } # Count NA's per col
+nrow(df_temp[rowSums(is.na(df_temp)) == ncol(df_temp), ]) # Count rows with all NA's
+df_temp <- df_temp[rowSums(is.na(df_temp)) != ncol(df_temp), ] # Remove rows with all NA's
+
+df_temp <- melt(df_temp, 'date')
+
+png(filename='images/EIAdata_us_primenrg_prod.png', 
+    width = 1000, height = 1000, res = 150)
+
+ggplot(aes(x=date, weight=value, fill=variable), data=df_temp) +
+  geom_bar() + 
+  labs(x='Year', y='Primary Energy Production (Quadrillian Btu)') +
+  labs(color='Legend') +
+  scale_fill_discrete(labels = c('Natural Gas',
+                                 'Crude Oil',
+                                 'Coal',
+                                 'Renewables',
+                                 'Nuclear',
+                                 'Natural Gas Plant Liquids')) +
+  scale_y_continuous(breaks = round(seq(0, 100, by = 15), 1)) +
+  scale_x_date(date_breaks = '5 year', date_minor_breaks = '5 year', date_labels = '%Y') +
+  theme(plot.title = element_text(lineheight=.7, face='bold')) +
+  theme(legend.position='bottom')
+  
+dev.off()
+```
+
+Figure A1 shows a stacked barplot of total energy output according to source of production within the U.S., from 1950 through to 2015. As the plot shows, total energy production in the U.S. over all sources saw a rapid increase from 1950 through to 1970, and then moderate growth between 1970 and 2005. Since 2005 however, U.S. energy production has seen another sharp rise. The plot also indicates the major sources of energy production, with natural gas, crude oil and coal being the major contributors to total energy production.
+
+```{r, include=FALSE}
+for(package in c('reshape', 'ggplot2')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+df_temp <- list_eiaannualdata.raw[[6]] # raw_us_primenrg_prod
+df_temp <- df_temp[rowSums(is.na(df_temp)) != ncol(df_temp), ] # Remove rows with all NA's
+df_temp <- subset(df_temp, date >= as.Date("2005-01-01") )
+
+for (c in colnames(df_temp)) {
+  if (c != 'date') {
+    df_temp[, paste0(c, '.index')] <- 100*df_temp[, c]/df_temp[1, c]
+  }
+}
+
+png(filename='images/EIAdata_us_primenrg_prod_indexed.png', 
+    width = 1000, height = 1000, res = 150)
+
+ggplot(df_temp, aes(date)) +
+  geom_line(aes(y=us_primenrg_prod_natgas.index, colour='Natural Gas'), size=1) + 
+  geom_line(aes(y=us_primenrg_prod_crudeoil.index, colour='Crude Oil'), size=1) +
+  geom_line(aes(y=us_primenrg_prod_coal.index, colour='Coal'), size=1) +
+  geom_line(aes(y=us_primenrg_prod_natgaplantliq.index, colour='Natural Gas Plant Liquids'), size=1) +
+  labs(x='Year', y='Indexed Primary Energy Production (Quadrillian Btu)') +
+  labs(color='Legend') +
+  scale_color_manual(values=c('Natural Gas' = '#F8766D', 
+                              'Crude Oil' = '#B79F00',
+                              'Coal' = '#00BA38', 
+                              'Natural Gas Plant Liquids' = '#00BFC4')) +
+  #scale_fill_continuous(labels = c('label1', 'label2', 'label3', 'label4')) +
+  scale_y_continuous(breaks = round(seq(80, 200, by = 10), 1)) +
+  scale_x_date(date_breaks = '1 year', date_minor_breaks = '1 year', date_labels = '%Y') +
+  theme(plot.title = element_text(lineheight=.7, face='bold')) +
+  theme(legend.position='bottom')
+
+dev.off()
+```
+
+We are able to index each of the major sources of production from 2005 in order to track the contribution by source of energy over the 2005 to 2015 period. As shown in Figure A2, we can see that coal energy production has actually fallen since 2005, which may be partially attributed to lower demand for coal as countries move towards cleaner energy sources [@Saun2015]. In contrast, production of crude oil and natural gas sources has increased. Clearly the rapid rise in total U.S. energy production between 2005 and 2015 can be mainly attributed to crude oil and natural gas.
+
+```{r, include=FALSE}
+for(package in c('reshape', 'ggplot2')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+df_temp <- list_eiaannualdata.raw[[3]] # raw_opec_crudeoil_prod
+
+for(c in colnames(df_temp)){ print(paste0(c, ': ', sum(is.na(df_temp[, c])))) } # Count NA's per col
+nrow(df_temp[rowSums(is.na(df_temp)) == ncol(df_temp), ]) # Count rows with all NA's
+df_temp <- df_temp[rowSums(is.na(df_temp)) != ncol(df_temp), ] # Remove rows with all NA's
+
+df_tempsort <- df_temp[,-1][, order(colSums(df_temp[,-1]))]
+df_tempsum <- data.frame(rowSums(df_tempsort[, 1:7]))
+colnames(df_tempsum) <- c('opec_crudeoil_prod_other')
+df_temp <- cbind(date = df_temp[, 'date'], df_tempsum, df_tempsort[, 7:ncol(df_tempsort)])
+print(colnames(df_temp))
+rm(df_tempsort, df_tempsum)
+
+df_temp <- melt(df_temp, 'date')
+
+png(filename='images/EIAdata_opec_crudeoil_prod.png', 
+    width = 1000, height = 1000, res = 150)
+
+ggplot(aes(x=date, weight=value, fill=variable), data=df_temp) +
+  geom_bar() + 
+  labs(x='Year', y='Crude Oil Production (Millions of Barrels per Day)') +
+  labs(color='Legend') +
+  scale_fill_discrete(labels = c('Saudi Arabia', 
+                                 'Iran', 
+                                 'Venezuela', 
+                                 'United Arab Emirates', 
+                                 'Nigeria', 
+                                 'Iraq',
+                                 'Other Members')) +
+  scale_y_continuous(limits = c(0, 40000),
+                     breaks = round(seq(0, 40000, by = 5000), 1)) +
+  scale_x_date(date_breaks = '5 year', date_minor_breaks = '5 year', date_labels = '%Y') +
+  theme(plot.title = element_text(lineheight=.7, face='bold')) +
+  theme(legend.position='bottom')
+
+dev.off()
+```
+
+The Organization of the Petroleum Exporting Countries (OPEC) is also a major producer of crude oil energy products. As Figure A3 shows, OPEC has not sacrificed any market share over this period of growth in U.S. petroleum production. In fact, OPEC has also seen a steady increase in crude oil production from 2005 through to 2015. We can also note the major OPEC producers, with Saudi Arabia clearly being the dominant contributor to total OPEC production.
+
+```{r, include=FALSE}
+df_temp <- list_eiaannualdata.raw[[7]] # raw_us_totalenrg_cons
+
+for(c in colnames(df_temp)){ print(paste0(c, ': ', sum(is.na(df_temp[, c])))) } # Count NA's per col
+nrow(df_temp[rowSums(is.na(df_temp)) == ncol(df_temp), ]) # Count rows with all NA's
+df_temp <- df_temp[rowSums(is.na(df_temp)) != ncol(df_temp), ] # Remove rows with all NA's
+df_temp <- melt(df_temp, 'date')
+
+png(filename='images/EIAdata_us_totalenrg_cons.png', 
+    width = 1000, height = 1000, res = 150)
+
+ggplot(aes(x=date, weight=value, fill=variable), data=df_temp) +
+  geom_bar() + 
+  labs(x='Year', y='Total Energy Consumption (Quadrillian Btu)') +
+  labs(color='Legend') +
+  scale_fill_discrete(labels = c('Residential', 
+                                 'Commercial', 
+                                 'Industrial', 
+                                 'Transportation')) +
+  scale_y_continuous(limits = c(0, 110000),
+                     breaks = round(seq(0, 110000, by = 10000), 1)) +
+  scale_x_date(date_breaks = '5 year', date_minor_breaks = '5 year', date_labels = '%Y') +
+  theme(plot.title = element_text(lineheight=.7, face='bold')) +
+  theme(legend.position='bottom')
+
+dev.off()
+
+df_temp <- list_eiaannualdata.raw[[1]] # raw_oecd_petrol_cons
+
+sapply(df_temp, class)
+df_temp[, 2:ncol(df_temp)] <- sapply(df_temp[, 2:ncol(df_temp)], as.numeric)
+
+for(c in colnames(df_temp)){ print(paste0(c, ': ', sum(is.na(df_temp[, c])))) } # Count NA's per col
+for(c in colnames(df_temp[,-1])){ print(paste0(c, ': ', sum(df_temp[, c] == ""))) } # Count blanks per col
+
+df_temp[rowSums(is.na(df_temp)) > 0, ] # Show rows with any NA's
+df_temp <- df_temp[1:(nrow(df_temp)-2), ] # Remove last two rows
+#df_temp <- df_temp[rowSums(is.na(df_temp)) != ncol(df_temp), ] # Remove rows with all NA's
+
+df_tempsort <- df_temp[,-1][, order(colSums(df_temp[,-1]))]
+df_tempsum <- data.frame(rowSums(df_tempsort[, 1:5]))
+colnames(df_tempsum) <- c('opec_crudeoil_prod_other')
+df_temp <- cbind(date = df_temp[, 'date'], df_tempsum, df_tempsort[, 5:ncol(df_tempsort)])
+df_temp[, 'opec_crudeoil_prod_other'] <- df_temp[, 'opec_crudeoil_prod_other'] + df_temp[, 'oecd_petrol_cons_otheroecd']
+df_temp[, 'oecd_petrol_cons_otheroecd'] <- NULL
+df_temp[, 'oecd_petrol_cons_totaloecd'] <- NULL
+print(colnames(df_temp))
+rm(df_tempsort, df_tempsum)
+
+df_temp <- melt(df_temp, 'date')
+
+png(filename='images/EIAdata_oecd_petrol_cons.png', 
+    width = 1000, height = 1000, res = 150)
+
+ggplot(aes(x=date, weight=value, fill=variable), data=df_temp) +
+  geom_bar() + 
+  labs(x='Year', y='Total Petroleum Consumption (Millions of Barrels per Day)') +
+  labs(color='Legend') +
+  scale_fill_discrete(labels = c('US', 
+                                 'Europe', 
+                                 'Japan', 
+                                 'Germany', 
+                                 'France', 
+                                 'Other Members')) +
+  scale_y_continuous(limits = c(0, 70000),
+                     breaks = round(seq(0, 70000, by = 10000), 1)) +
+  scale_x_date(date_breaks = '5 year', date_minor_breaks = '5 year', date_labels = '%Y') +
+  theme(plot.title = element_text(lineheight=.7, face='bold')) +
+  theme(legend.position='bottom')
+
+dev.off()
+```
+
+On the demand side, we can see from Figure A4 that while total energy consumption in the U.S. has increased steadily from 1950 through to 2005, consumption has remained flat since 2005. We can also note that the Industrial and Transportation sectors have remained the dominant energy consumers within the U.S. since 1950. Figure A5 reaffirms this with demand for petroleum products by the wider Organization for Economic Cooperation and Development (OECD) members actually falling since 2005. This fall in demand was most notable in France and in the general category of 'Other Members', which includes countries such as Australia, the United Kingdom and Italy.
+
+```{r, include=FALSE}
+for(package in c('ggplot2')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+df_temp <- list_eiamonthlydata.raw[[4]] # raw_us_crudeoil_price
+
+df_temp <- subset(df_temp, date >= as.Date("2000-01-01") )
+
+png(filename='images/EIAdata_us_crudeoil_price.png', 
+    width = 1000, height = 1000, res = 150)
+
+ggplot(df_temp, aes(date)) +
+  geom_line(aes(y=us_crudeoil_price_domestic, colour='#F8766D'), size=1) + 
+  labs(x='Year', y='US Dollars per Barrel') +
+  scale_y_continuous(breaks = round(seq(0, 1000, by = 50), 1)) +
+  scale_x_date(date_breaks = '1 year', date_minor_breaks = '1 year', date_labels = '%Y') +
+  theme(plot.title = element_text(lineheight=.7, face='bold')) +
+  theme(legend.position='none')
+
+dev.off()
+```
+
+With crude oil production growing in the U.S. since 2005 and lackluster demand for petroleum products from the wider OECD, the effect has been a fall in U.S. crude oil prices. This can be seen in Figure A6. The sudden fall in prices over late 2014/early 2015 was, in part, a response to OPEC's decision to not sacrifice market share to growing U.S. production [@Baff2015]. These factors have contributed to the domestic price of U.S. Crude Oil falling to prices not seen since the Global Financial Crisis in 2008.
+
+```{r, include=FALSE}
+for(package in c('xlsx', 'zoo', 'reshape')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+df_eia.raw <- read.xlsx('data/raw_us_weekly.xlsx', sheetName='Sheet1', stringsAsFactors=FALSE)
+
+df_eia.processed <- df_eia.raw
+df_eia.processed[, 'date'] <- as.Date(as.character(df_eia.processed[, 'date']), format='%Y-%m-%d')
+
+for (c in colnames(df_eia.raw)) {
+  if (c != 'date') {
+    df_eia.processed[, paste0(c, '.diff')] <- c(0, diff(df_eia.processed[, c]))
+  }
+}
+
+for (c in colnames(df_eia.raw)) {
+  if (c != 'date') {
+    df_eia.processed[, paste0(c, '.index')] <- 100*df_eia.processed[, c]/df_eia.processed[1, c]
+  }
+}
+
+rm(c)
+
+val_nacols <- apply(df_eia.processed, 2, function(x) any(is.na(x)))
+df_eia.processed[, val_nacols] <- na.approx(df_eia.processed[, val_nacols])
+
+inf_cols <- apply(df_eia.processed, 2, function(x) any(is.infinite(x)))
+df_eia.processed[, inf_cols] <- na.approx(df_eia.processed[, inf_cols])
+
+rm(val_nacols, inf_cols)
+```
+
+```{r, include=FALSE}
+for(package in c('grid', 'ggplot2')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+df_temp <- subset(df_eia.processed, date >= as.Date("2015-01-01"))
+
+png(filename='images/EIAdata_us_crudeoil_pricesupply.png', 
+    width = 1000, height = 1000, res = 150)
+
+par(mfrow=c(2,2))
+
+vp <- viewport(height = unit(0.5, "npc"), width = unit(0.5, "npc"), 
+               just = c("right", "bottom"), 
+               y = 0.5, x = 0.5)
+
+p <- ggplot(df_temp, aes(date)) +
+  geom_line(aes(y=RCLC1_Cushing_Oil_Future, colour='#F8766D'), size=1) + 
+  labs(x='Month of 2015', y='US Dollars \n per Barrel', title='US Crude Oil Domestic Price') +
+  scale_y_continuous(breaks = round(seq(30, 60, by = 5), 1)) +
+  scale_x_date(date_breaks = '1 month', date_minor_breaks = '1 month', date_labels = '%b') +
+  theme(plot.title = element_text(lineheight=.7, face='bold')) +
+  theme(legend.position='none')
+
+print(p, vp = vp)
+
+vp <- viewport(height = unit(0.5, "npc"), width = unit(0.5, "npc"), 
+               just = c("left", "bottom"), 
+               y = 0.5, x = 0.5)
+
+cutoff <- data.frame(x = c(-Inf, Inf), y = 0, cutoff = factor(0))
+p <- ggplot(df_temp, aes(date)) +
+  geom_line(aes(y=RCLC1_Cushing_Oil_Future.diff, colour='#F8766D'), size=1) +
+  geom_hline(yintercept = 0) + 
+  labs(x='Month of 2015', y='Weekly Change in \n US Dollars per Barrel', title='US Crude Oil Domestic Price (Delta)') +
+  scale_y_continuous(breaks = round(seq(-10, 10, by = 2), 1)) +
+  scale_x_date(date_breaks = '1 month', date_minor_breaks = '1 month', date_labels = '%b') +
+  theme(plot.title = element_text(lineheight=.7, face='bold')) +
+  theme(legend.position='none')
+
+print(p, vp = vp)
+
+vp <- viewport(height = unit(0.5, "npc"), width = unit(0.5, "npc"), 
+               just = c("right", "top"), 
+               y = 0.5, x = 0.5)
+
+p <- ggplot(df_temp, aes(date)) +
+  geom_line(aes(y=WRPUPUS2_Weekly_US_Supplied, colour='#F8766D'), size=1) + 
+  labs(x='Month of 2015', y='Barrels of US Crude \n Oil Supplied', title='US Crude Oil Supplied') +
+  scale_y_continuous(breaks = round(seq(15000, 25000, by = 500), 1)) +
+  scale_x_date(date_breaks = '1 month', date_minor_breaks = '1 month', date_labels = '%b') +
+  theme(plot.title = element_text(lineheight=.7, face='bold')) +
+  theme(legend.position='none')
+
+print(p, vp = vp)
+
+vp <- viewport(height = unit(0.5, "npc"), width = unit(0.5, "npc"), 
+               just = c("left", "top"), 
+               y = 0.5, x = 0.5)
+
+p <- ggplot(df_temp, aes(date)) +
+  geom_line(aes(y=WRPUPUS2_Weekly_US_Supplied.diff, colour='#F8766D'), size=1) + 
+  geom_hline(yintercept = 0) + 
+  labs(x='Month of 2015', y='Weekly Change in \n Crude Oil Supplied', title='US Crude Oil Supplied (Delta)') +
+  scale_y_continuous(breaks = round(seq(-2000, 3000, by = 1000), 1)) +
+  scale_x_date(date_breaks = '1 month', date_minor_breaks = '1 month', date_labels = '%b') +
+  theme(plot.title = element_text(lineheight=.7, face='bold')) +
+  theme(legend.position='none')
+
+print(p, vp = vp)
+
+dev.off()
+```
+
+Figure A7 takes a closer look at crude oil price and supply from the U.S. over 2015. We note that while oil prices have continued to follow a downward trend over 2015, crude oil supply out of the U.S. has remained firm. It may be assumed that the U.S. have chosen not to cut oil supply to prevent loss of market share to the OPEC and other competitors.
+
+```{r, include=FALSE}
+for(package in c('ggplot2')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+df_temp <- subset(df_eia.processed, date >= as.Date("2000-01-01"))
+df_tempdate <- subset(df_eia.processed, date >= as.Date("2000-01-01"))
+
+#df_eia_RCLC1_Cushing_Oil_Future.zoo <- zoo(df_temp[, 'RCLC1_Cushing_Oil_Future'], 
+#                                            order.by=df_temp[, 'date'])
+df_eia_RCLC1_Cushing_Oil_Future.ts <- ts(df_temp[, 'RCLC1_Cushing_Oil_Future'], frequency=52)
+df_eia_RCLC1_Cushing_Oil_Future.stl = stl(df_eia_RCLC1_Cushing_Oil_Future.ts, s.window='per')
+
+df_temp <- as.data.frame(cbind(df_eia_RCLC1_Cushing_Oil_Future.ts, 
+                               df_eia_RCLC1_Cushing_Oil_Future.stl$time.series))
+
+colnames(df_temp) <- c('Data', 'Seasonal', 'Trend', 'Remainder')
+
+df_temp[, 'date'] <- df_tempdate[, 'date']
+#rownames(df_temp) <- df_temp[, 'date']
+#df_temp[, 'date'] <- NULL
+
+df_temp <- melt(df_temp, 'date')
+
+png(filename='images/EIAdata_us_crudeoil_pricedecomp.png', 
+    width = 1000, height = 1000, res = 150)
+
+ggplot(df_temp, aes(x=date, y=value)) +
+  labs(x='Year', y='US Dollars per Barrel') +
+  geom_line(colour='#F8766D') +
+  scale_x_date(date_breaks = '1 year', date_minor_breaks = '1 year', date_labels = '%Y') +
+  facet_free(variable~.)
+
+dev.off()
+```
+
+In order to predict U.S. crude oil price, there are a number of options available. We can apply a simple moving average, a weighted moving average, specify a linear or non-linear function to the data, or even apply an Autoregressive Integrated Moving Average (ARIMA) model. Each option would remain naive to the supply and demand data previously demonstrated, but provide a simple means for timeseries forecasting. Prior to fitting a model to the price data, we can decompose the weekly price series in order to identify underlying seasonality or trend within the dataset.
+
+Figure A8 shows the decomposed series with a timeseries frequency of 52 weeks. The seasonal effect between years is immediately obvious, with the decomposition able to isolate a reoccurring seasonal pattern which explains almost US$10/barrel of price variance within any given year. The underlying trend within the data is also presented, providing a more clear indication of the recent price weakness.
+
+```{r, include=FALSE}
+for(package in c('forecast', 'tseries', 'ggplot2', 'ggfortify')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+png(filename='images/EIAdata_us_crudeoil_priceforecast.png', 
+    width = 1000, height = 1000, res = 150)
+
+df_temp <- subset(df_eia.processed, date >= as.Date("2010-01-01"))
+df_temp.ts <- ts(df_temp[, 'RCLC1_Cushing_Oil_Future'], 
+                 start=c(2010-01-01), frequency=52)
+#d.arima <- auto.arima(df_temp.ts)
+d.forecast <- forecast(df_temp.ts, level = c(95), h = 50)
+autoplot(d.forecast) +
+  labs(y='US Dollars per Barrel') +
+  scale_y_continuous(breaks = round(seq(0, 120, by = 10), 1)) +
+  scale_x_continuous(breaks = round(seq(2008, 2015, by = 1), 1)) +
+  theme(plot.title = element_text(lineheight=.7, face='bold')) +
+  theme(legend.position='none')
+
+dev.off()
+```
+
+Finally, we fit an ARIMA model to the data in order to generate and visually represent a forecast of crude oil prices. This model suggests that prices will continue to fall during 2016.
+
+#3 Conclusion
+
+Crude oil production in the U.S. increased dramatically between 2005 and 2015. This increase in production occurred at a time where OPEC members also increased crude oil production and total demand for petroleum products either remained flat or declined in many developed economies. The excess supply relative to demand has led to crude oil prices falling between 2005 and 2015 to levels not seen since the Global Financial Crisis. A decomposition of weekly crude oil prices was also plotted. This plot showed that seasonal patterns account for almost US$10/barrel of price variance within any given year.
+
+# Appendix A Figure Output
+
+## Figure A1 U.S. Primiary Energy Production by Source
+
+![Energy Production](images/EIAdata_us_primenrg_prod.png 'Energy Production'){#id .class height=800px}
+
+\newpage
+
+## Figure A2 U.S. Primiary Energy Production by Source
+### (indexed to 100x10^15 Btu at 2005)
+
+![Indexed Energy Production](images/EIAdata_us_primenrg_prod_indexed.png 'Indexed Energy Production'){#id .class height=1000px} 
+
+\newpage
+
+## Figure A3 OPEC Crude Oil Production
+
+![Crude Oil Production](images/EIAdata_opec_crudeoil_prod.png 'Crude Oil Production'){#id .class height=800px}
+
+\newpage
+
+## Figure A4 U.S. Total Energy Consumption by Industry
+
+![Total Energy Consumption](images/EIAdata_us_totalenrg_cons.png 'Total Energy Consumption'){#id .class height=1000px}
+
+\newpage
+
+## Figure A5 OECD Total Petroleum Consumption
+
+![OECD Petroleum Consumption](images/EIAdata_oecd_petrol_cons.png 'OECD Petroleum Consumption'){#id .class height=1000px}
+
+\newpage
+
+## Figure A6 U.S. Crude Oil Price
+
+![Oil Price](images/EIAdata_us_crudeoil_price.png 'Oil Price'){#id .class height=800px} 
+
+\newpage
+
+## Figure A7 U.S. Crude Oil Price versus U.S. Crude Oil Supply
+
+![Oil Price vs Supply](images/EIAdata_us_crudeoil_pricesupply.png 'Oil Price vs Supply'){#id .class height=1000px}
+
+\newpage
+
+## Figure B8 U.S. Crude Oil Price Decomposition Plot
+
+![Oil Price Decomposition](images/EIAdata_us_crudeoil_pricedecomp.png 'Oil Price Decomposition'){#id .class height=1000px}
+
+\newpage
+
+## Figure B9 U.S. Crude Oil Price Forecast
+
+![Oil Price Forecast](images/EIAdata_us_crudeoil_priceforecast.png 'Oil Price Forecast'){#id .class height=1000px}
+
+\newpage
+
+# References
+

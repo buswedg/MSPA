@@ -1,0 +1,226 @@
+\documentclass[]{article}
+\usepackage{lmodern}
+\usepackage[compact]{titlesec}
+\usepackage{amssymb,amsmath}
+\usepackage{ifxetex,ifluatex}
+\usepackage{fixltx2e} % provides \textsubscript
+\ifnum 0\ifxetex 1\fi\ifluatex 1\fi=0 % if pdftex
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+\else % if luatex or xelatex
+  \ifxetex
+    \usepackage{mathspec}
+  \else
+    \usepackage{fontspec}
+  \fi
+  \defaultfontfeatures{Ligatures=TeX,Scale=MatchLowercase}
+\fi
+% use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+% use microtype if available
+\IfFileExists{microtype.sty}{%
+\usepackage{microtype}
+\UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\hypersetup{unicode=true,
+            pdftitle={Bonus Assignment 1},
+            pdfauthor={Darryl Buswell},
+            pdfborder={0 0 0},
+            breaklinks=true}
+\urlstyle{same}  % don't use monospace font for urls
+\usepackage{graphicx,grffile}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+\IfFileExists{parskip.sty}{%
+\usepackage{parskip}
+}{% else
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt plus 2pt minus 1pt}
+}
+\setlength{\emergencystretch}{3em}  % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{0}
+% Redefines (sub)paragraphs to behave more like sections
+\ifx\paragraph\undefined\else
+\let\oldparagraph\paragraph
+\renewcommand{\paragraph}[1]{\oldparagraph{#1}\mbox{}}
+\fi
+\ifx\subparagraph\undefined\else
+\let\oldsubparagraph\subparagraph
+\renewcommand{\subparagraph}[1]{\oldsubparagraph{#1}\mbox{}}
+\fi
+
+%%% Use protect on footnotes to avoid problems with footnotes in titles
+\let\rmarkdownfootnote\footnote%
+\def\footnote{\protect\rmarkdownfootnote}
+
+%%% Change title format to be more compact
+\usepackage{titling}
+
+% Create subtitle command for use in maketitle
+\newcommand{\subtitle}[1]{
+  \posttitle{
+    \begin{center}\large#1\end{center}
+    }
+}
+
+\setlength{\droptitle}{-2em}
+  \title{Bonus Assignment 1}
+  \pretitle{\vspace{\droptitle}\centering\huge}
+  \posttitle{\par}
+\subtitle{MSPA PREDICT 422-DL-56 LEC}
+  \author{Darryl Buswell}
+  \preauthor{\centering\large\emph}
+  \postauthor{\par}
+  \date{}
+  \predate{}\postdate{}
+
+\begin{document}
+\maketitle
+
+\section{1 Introduction}\label{introduction}
+
+This document presents results of the first bonus assessment for the
+Masters of Science in Predictive Analytics course: PREDICT 422. This
+assessment required the student to perform cluster-wise regression for
+automobile data from the rpart package.
+
+\section{2 Bonus Assessment}\label{bonus-assessment}
+
+\subsection{2.1 Load the Dataset}\label{load-the-dataset}
+
+As a first step, we load the `car.test.frame' data from the rpart
+package and observe the structure of the data.
+
+We can see that the dataset includes a number of numeric and factor type
+variables:
+
+\begin{itemize}
+\tightlist
+\item
+  Price: a numeric vector giving the list price in US dollars of a
+  standard model
+\item
+  Country: of origin, a factor with levels France, Germany, Japan ,
+  Japan/USA, Korea, Mexico, Sweden and USA
+\item
+  Reliability: a numeric vector coded 1 to 5
+\item
+  Mileage: fuel consumption miles per US gallon, as tested.
+\item
+  Type: a factor with levels Compact Large Medium Small Sporty Van
+\item
+  Weight: kerb weight in pounds
+\item
+  Disp.: the engine capacity (displacement) in litres
+\item
+  HP: the net horsepower of the vehicle.
+\end{itemize}
+
+`Price' will be our response variable, whilst `Mileage', `Weight',
+`Disp', `HP' will form our set of predictor variables.
+
+\subsection{2.2 Model Fit: Single
+Cluster}\label{model-fit-single-cluster}
+
+For this assessment, we leverage the FlexMix package in order to perform
+cluster-wise regression. FlexMix implements a general framework for
+finite mixtures of regression models, with parameter estimation being
+performed using the EM algorithm. We first fit a cluster-wise regression
+using a single cluster (the full set of observations). The model fit is
+shown below.
+
+\begin{verbatim}
+## 
+## Call:
+## flexmix(formula = Price ~ Mileage + Weight + Disp. + HP, 
+##     data = car.test.frame, k = 1)
+## 
+##        prior size post>0 ratio
+## Comp.1     1   60     60     1
+## 
+## 'log Lik.' -555.404 (df=6)
+## AIC: 1122.808   BIC: 1135.374
+\end{verbatim}
+
+We can also observe the parameter estimates over the cluster by using
+the `parameters' function.
+
+\begin{verbatim}
+##                       Comp.1
+## coef.(Intercept)  822.181804
+## coef.Mileage     -165.400112
+## coef.Weight         4.602914
+## coef.Disp.        -40.567694
+## coef.HP            70.908074
+## sigma            2642.448365
+\end{verbatim}
+
+We note the polarity of the majority of coefficients estimate seems
+reasonable, with an increase in fuel consumption translating to a
+decrease in price, or an increase in horse power resulting in an
+increase in price. The weight and displacement variables are more
+difficult to justify however.
+
+\subsection{2.3 Model Fit: Two Clusters}\label{model-fit-two-clusters}
+
+We can repeat this exercise by refitting the cluster-wise regression
+with two clusters. The model fit is shown below.
+
+\begin{verbatim}
+## 
+## Call:
+## flexmix(formula = Price ~ Mileage + Weight + Disp. + HP, 
+##     data = car.test.frame, k = 2)
+## 
+##        prior size post>0 ratio
+## Comp.1   0.7   46     55 0.836
+## Comp.2   0.3   14     55 0.255
+## 
+## 'log Lik.' -538.7509 (df=13)
+## AIC: 1103.502   BIC: 1130.728
+\end{verbatim}
+
+We can see that the dataset has been broken into two samples of 46 and
+14 observations in length. We note the improvement in AIC and BIC values
+reported for the above model versus the single cluster model previously
+fit.
+
+Again, we can also observe the parameter estimates over both clusters by
+using the `parameters' function.
+
+\begin{verbatim}
+##                       Comp.1
+## coef.(Intercept) 6101.909096
+## coef.Mileage     -193.960149
+## coef.Weight         3.561308
+## coef.Disp.        -12.628352
+## coef.HP            13.304388
+## sigma            1173.502924
+\end{verbatim}
+
+\begin{verbatim}
+##                      Comp.2
+## coef.(Intercept) 2867.77610
+## coef.Mileage     -463.78457
+## coef.Weight        11.91847
+## coef.Disp.        -91.74390
+## coef.HP            27.43067
+## sigma            2151.60300
+\end{verbatim}
+
+We can see that although the polarity of coefficient is consistent over
+both clusters, the magnitude of those coefficients does have some
+variation.
+
+
+\end{document}

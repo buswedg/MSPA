@@ -1,0 +1,83 @@
+---
+output: 
+  pdf_document:
+    pandoc_args: [
+      "--template=M1_template.latex",
+      "--bibliography=M1_template.bib"
+    ]
+---
+# MSPA PREDICT 450-DL-SEC55 
+# Micro 1: Segmentation Analysis Kickstart
+### Darryl Buswell
+
+&nbsp;
+
+```{r, include=FALSE}
+
+# Load the dataset
+load('data/appHappyData-sp2016.RData')
+df_appnum.raw <- apphappy.4.num.frame
+
+# Data structure/stats
+summary(df_appnum.raw)
+str(df_appnum.raw)
+dim(df_appnum.raw)
+
+```
+
+### 1 What variables in the data file will you use as the "basis variables" for your segmentation analysis?
+
+App Happy wants the analyst to undertake a 'general attitudinal post hoc segmentation analysis'. As such, attitudinal item variables will make up the basis variables for this analysis. Attitudinal item variables should be able to 'characterize' groups based on attitudes, therefore allowing the analyst to identify groups that might comprise of useful attitudinal segments.
+
+From a review of the original survey, we find that Questions 24, 25 and 26 make the best candidates for basis variables. Question 24 relates to the respondents level of technological adoption or technological acceptance, Question 25 relates to personality characteristics, and Question 26 relates to purchasing behavior.
+
+### 2 Will you treat your basis variables as continuous measures, categorical measures, or perhaps both?
+
+The data used in cluster analysis can be of continuous or categorical type, however the type of data will influence the use of dissimilarity (or distance) metric. For continuous variables, the most common distance measure is the Euclidean distance, while for categorical or mixed type data, a Gower distance metric would be more appropriate [@Eve2011]. 
+
+All three of the identified basis variables employ a six level Likert scale: Agree Strongly, Agree, Agree Somewhat, Disagree Somewhat, Disagree, and Disagree Strongly. In that case, each variable can be considered to be of categorical type. Although we have the option of using a numeric equivalent of these variables, there are still obvious risks in assuming the data to be of continuous type.
+
+Fortunately, the 'daisy' function as part of the 'cluster' package within R is able to compute distances using either a Euclidean or Gower distance metric [@Str2016]. As such, we will use the numeric equivalent of these variables from the numeric dataset, and leverage the Gower distance metric where possible.
+
+### 3 What two (or more) clustering algorithms will you use?
+
+Clustering algorithms can be separated into two main classes, hierarchical methods and non-hierarchical (or k-means clustering) methods. These methods are largely distinguished by how they derive a desired (or optimal) number of clusters. For hierarchical methods, the number of clusters is determined based on a dendrogram, while for non-hierarchical methods, the desired number of clusters is specified by the analyst in advance.
+
+There are R packages available for both hierarchical and non-hierarchical clustering methods. For hierarchical clustering, the 'agnes' function as part of the 'cluster' package is able to perform unweighted pair-grouping, single linkage, or complete linkage clustering methods [@Rou2016]. This package also has the benefit of being able to accept a dissimilarity matrix object directly, making its use alongside the 'daisy' function an attractive option.
+
+For non-hierarchical clustering, the 'k-means' function as part of the 'stats' package is one option [@ETH2016]. However, this function does not support the ability to directly pass a dissimilarity matrix object. An alternative may be the 'pam' function as part of the 'cluster' package [@Mae2016] which will in-fact accept a dissimilarity matrix object directly, providing a cluster partitioning around medoids.
+
+### 4 How many cases in the data have one or more missing values on your basis variables?
+
+Below includes a list of the number of observations (respondents) which recorded an NA within either the set of attitudinal (basis) variables, non-basis variables or within the dataset:
+
+```{r, echo=FALSE}
+
+# Subset the data for attitudinal variables
+colstart <- which(colnames(df_appnum.raw) == 'q24r1')
+colend <- which(colnames(df_appnum.raw) == 'q26r17')
+df_appnum.att = df_appnum.raw[,c(colstart:colend)]
+
+# Subset the data for nonattitudinal variables
+df_appnum.nonatt = df_appnum.raw[,c(-colstart:-colend)]
+
+# Count NA rows for attitudinal variables
+inclna <- nrow(df_appnum.att) 
+exclna <- nrow(na.omit(df_appnum.att))
+print(paste0("Basis observations: ", inclna - exclna)) #0
+
+# Count NA rows for non-attitudinal variables
+inclna <- nrow(df_appnum.nonatt) 
+exclna <- nrow(na.omit(df_appnum.nonatt))
+print(paste0("Non-basis observations: ", inclna - exclna)) #585
+
+# Count NA rows for original dataset
+inclna <- nrow(df_appnum.raw) 
+exclna <- nrow(na.omit(df_appnum.raw))
+print(paste0("Dataset observations: ", inclna - exclna)) #585
+
+```
+
+\newpage
+
+# Reference

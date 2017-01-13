@@ -1,0 +1,85 @@
+---
+title: 'Solo 1: Extracting Basis Variables for Clustering'
+output: 
+    html_document:
+        toc: True
+
+---
+
+_ _ _
+
+Copyright ©2016 Lynd Bacon & Associates, Ltd. DBA Loma Buena Associates.  All Rights Reserved.
+
+Disclaimer:  All content is provided "as is." It's not warranted to be suitable for any particular purpose.
+
+20150911a
+
+_ _ _
+
+### Extracting the attitudinal measures for clustering
+
+The first part of Solo 1 asks you to do a cluster analysis to define post hoc general attitudinal market segments.   The attitudinal measures in the questionnaire are the Likert-scaled items, the questions in questions 24, 25, and 26. These questions include 40 six-interval, agree/disagree rating scale items.  (You can count them if you want to.).   You're going to input the data for these items into functions that do diferent kinds of cluster analysis, and it would be convenient to extract them from num.frame into their own data frame.  The question is, how to do this?
+
+First, I need to load the Solo 1 data again as I'm creating this document from a new R/RStudio session.   You may or may not to load it again in order to follow along.
+
+
+```
+>load("~/Documents/PRED450-Winter-2016/solo-1-data/appHappyData-sp2016.RData")
+>num.frame=apphappy.4.num.frame
+```
+That'll do it. I reloaded the .RData file from my working directory, and recreated the ata frame num.frame.  Here are the names of the first 32 secolumns (variables) in num.frame:
+
+```
+>names(num.frame)
+```
+
+|  [1] "caseID" "q1"     "q2r1"   "q2r2"   "q2r3"   "q2r4"   "q2r5"   "q2r6"  
+|  [9] "q2r7"   "q2r8"   "q2r9"   "q2r10"  "q4r1"   "q4r2"   "q4r3"   "q4r4"  
+| [17] "q4r5"   "q4r6"   "q4r7"   "q4r8"   "q4r9"   "q4r10"  "q4r11"  "q5r1"  
+| [25] "q11"    "q12"    "q13r1"  "q13r2"  "q13r3"  "q13r4"  "q13r5"  "q13r6"
+| [33] "q13r7"  "q13r8"  "q13r9"  "q13r10" "q13r11" "q13r12" "q24r1"  "q24r2" 
+| [41] "q24r3"  "q24r4"  "q24r5"  "q24r6"  "q24r7"  "q24r8"  "q24r9"  "q24r10"
+| [49] "q24r11" "q24r12" "q25r1"  "q25r2"  "q25r3"  "q25r4"  "q25r5"  "q25r6" 
+| [57] "q25r7"  "q25r8"  "q25r9"  "q25r10" "q25r11" "q25r12" "q26r18" "q26r3" 
+| [65] "q26r4"  "q26r5"  "q26r6"  "q26r7"  "q26r8"  "q26r9"  "q26r10" "q26r11"
+| [73] "q26r12" "q26r13" "q26r14" "q26r15" "q26r16" "q26r17" "q48"    "q49"   
+| [81] "q50r1"  "q50r2"  "q50r3"  "q50r4"  "q50r5"  "q54"    "q55"    "q56"   
+| [89] "q57"  
+
+One way you could get the q24, q25, and q26 items out of num.frame is to note from the above output the range of the columns in num.frame where these attitudinal measures are.  You can see that the first one, q24r1, is in column 39, and the last one, q26r17 (note that they aren't in strict sorting order), is in 78. So you could copy these columns into a new data frame by doing something like:
+
+```
+>att.frame=num.frame[,c(39:78)]
+```
+So this new data frame att.frame would now have just the 40 attitudinal measures in it.
+
+### A little grepping around
+
+Another way of getting these measures out of num.frame is to use some code to search for them in num.frame's column names. Here's a tricky way of finding their numerical column names:
+
+`grep("^q2[456]{1}",names(num.frame))
+`
+
+This will return a numeric vector that's 40 elements long and that contains the column locations of the q24, q25, and q26 items.  Try it out and see.
+
+`grep` does pattern matching. The patterns are expressed in what is essentially an arcane language called *regular expressions*, or "regexs".  The pattern is what's between the double quotes.  This one matches strings that start with q2, where the next character is just one of 4, 5 or 6.  The patterns are searched for in the vector of column names returned by the function `names(num.frame)`.
+
+Regexs can be very helpful for many text processing tasks, but they can be difficult to figure out. As has been said: 
+
+>"Some people, when confronted with a problem, think   '_I know, I'll use regular expressions._'
+> Now they have two problems."
+>
+> -Jamie Zawinski, 1997
+
+
+In any case, you can look into regexs if you want.  Maybe the Good News is that you won't need them for this course.
+
+Be sure to save your att.frame.  And, be sure to use __save.image()__ often.
+
+_ _ _
+
+Copyright ©2016 Lynd Bacon & Associates, Ltd. DBA Loma Buena Associates.  All Rights Reserved.
+
+Disclaimer:  All content is provided "as is." It's not warranted to be suitable for any particular purpose.
+
+- - -

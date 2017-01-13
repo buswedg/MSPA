@@ -1,0 +1,255 @@
+﻿[caseID]: Respondent ID
+
+[STCowner]: previous owner of STC product?
+Values: 1 or 2
+ 1 or 2 = Owns or has owned STC remote or audio accessory 
+ any other value = not an STC  customer and has not ever been
+
+[CS1]: Task: 1
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS2]: Task: 2
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS3]: Task: 3
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS4]: Task: 4
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS5]: Task: 5
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS6]: Task: 6
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS7]: Task: 7
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS8]: Task: 8
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS9]: Task: 9
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS10]: Task: 10
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS11]: Task: 11
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS12]: Task: 12
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS13]: Task: 13
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS14]: Task: 14
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS15]: Task: 15
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS16]: Task: 16
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS17]: Task: 17
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS18]: Task: 18
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS19]: Task: 19
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS20]: Task: 20
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS21]: Task: 21
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS22]: Task: 22
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS23]: Task: 23
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS24]: Task: 24
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS25]: Task: 25
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS26]: Task: 26
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS27]: Task: 27
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS28]: Task: 28
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS29]: Task: 29
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS30]: Task: 30
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS31]: Task: 31
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS32]: Task: 32
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS33]: Task: 33
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS34]: Task: 34
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS35]: Task: 35
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[CS36]: Task: 36
+Values: 1-3
+ 1=Option 1
+ 2=Option 2
+ 3=Option 3
+
+[Int]: How interested are you in purchasing or doing each of the following in the next 12 months?
+Values: 1-10
+ 10=Extremely Interested 10
+ 9=9
+ 8=8
+ 7=7
+ 6=6
+ 5=5
+ 4=4
+ 3=3
+ 2=2
+ 1=Not At All Interested 1
+ [Intr1] Purchasing a new tablet
+ [Intr2] Purchasing a new smart phone
+ [Intr3] Using cloud storage for storing your personal digital content
+ [Intr4] Taking an online course to improve relevant skills
+
+[Gen]: What is your gender?
+Values: 1-2
+ 1=Male
+ 2=Female
+
+[Age]: What is your age?
+Values: 1-7
+ 1=Under 18
+ 2=18-24
+ 3=25-34
+ 4=35-44
+ 5=45-54
+ 6=55-64
+ 7=65 or older
+

@@ -1,0 +1,277 @@
+---
+title: "Design"
+subtitle: "MSPA PREDICT 455-DL-SEC55"
+author: "Darryl Buswell"
+output: 
+  pdf_document:
+    fig_caption: no
+    keep_tex: yes
+    pandoc_args: [
+      "--template=A5_template.latex",
+      "--bibliography=A5_template.bib"
+    ]
+---
+
+\newpage
+
+# 1 Introduction
+
+This assignment looks to improve on an existing visualization found on the web by employing best visualization practices. 
+
+# 2 Data
+
+Data for this assessment is based on the Iris flower dataset [@CEN2011]. This dataset contains measurements of three classes of flowers. Measurements include the width and height of each flowers sepal and petal. The three classes of flower include Setosa, Versicolour, and Virginica.
+
+# 3 Visualization
+
+The visualization which I have chosen to improve on can be found within an article posted on the R-bloggers website [@TUR2011]. The article demonstrates three R generated plots which focus on showing bivariate relationships between each variable within the Iris dataset. This assessment has a particular focus on improving the 'Iris Scatterplot Matrix' visualization presented within this article. The visualization is shown in Appendix A.
+
+In my opinion, the original visualization has a number of shortcomings:
+
+- The correlation coefficients presented in the matrix are sized by coefficient strength and as such, the weakest correlation coefficient is too small to be easily read.
+- The correlation coefficients presented in the matrix lack polarity. That is, the viewer is required to look at the trend line drawn in each scatter plot in order to determine whether a relationship is positive or negative.
+- The dataset does not recognize that there are three class of data within the original dataset.
+- The included x and y-axis ranges for each scatter plot alternate from being located on the left/right, top/bottom of the visualization, making any assessment of scale difficult.
+
+To improve this visualization, I have constructed a 2x2 grid visualization. The visualization can also be found in Appendix A. The top left grid box in this visualization contains some basic data summary statistics for the dataset, the top right grid box contains a summary of correlations between each variable, and finally, the bottom two grids show bivariate scatter plots between petal and sepal sizes.
+
+For the correlation summary visualization, I leveraged a modified version of the plotcorr function from the 'ellipse' package. This visualization has the benefit of being able to show a simplified representation of variable correlations using ellipse planes. The actual correlation coefficients are also shown in this visualization and are indicated as being positive or negative according to the relationship. The two scatter plots were generated using the 'ggplot2' package. By coloring each scatter plot according to the class (species), the viewer is able to get a quick glimpse of the relationship between the continuous and categorical data types. I managed to find a solution to allow the two scatter plots to share the same legend.
+
+```{r, include=FALSE, eval=FALSE}
+for(package in c('ellipse')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+# this is a modified version of the plotcorr function from the ellipse package
+my.plotcorr <- function (corr, outline = FALSE, 
+                         col = 'grey', 
+                         upper.panel = c('ellipse', 'number', 'none'), 
+                         lower.panel = c('ellipse', 'number', 'none'), 
+                         diag = c('none', 'ellipse', 'number'), 
+                         digits = 2, bty = 'n', axes = FALSE, 
+                         xlab = '', ylab = '', asp = 1, cex.lab = par('cex.lab'), 
+                         cex = 1.2 * par('cex'), mar = 0.1 + c(2, 2, 4, 2), ...) {
+  if (!require('ellipse', quietly = TRUE, character = TRUE)) {
+    stop('Need the ellipse library')
+  }
+  savepar <- par(pty = 's', mar = mar)
+  on.exit(par(savepar))
+  if (is.null(corr))
+    return(invisible())
+  if ((!is.matrix(corr)) || (round(min(corr, na.rm = TRUE), 6) < -1) || (round(max(corr, na.rm = TRUE), 6) > 1))
+    stop('Need a correlation matrix')
+  plot.new()
+  par(new = TRUE)
+  rowdim <- dim(corr)[1]
+  coldim <- dim(corr)[2]
+  rowlabs <- dimnames(corr)[[1]]
+  collabs <- dimnames(corr)[[2]]
+  if (is.null(rowlabs))
+    rowlabs <- 1:rowdim
+  if (is.null(collabs))
+    collabs <- 1:coldim
+  rowlabs <- as.character(rowlabs)
+  collabs <- as.character(collabs)
+  col <- rep(col, length = length(corr))
+  dim(col) <- dim(corr)
+  upper.panel <- match.arg(upper.panel)
+  lower.panel <- match.arg(lower.panel)
+  diag <- match.arg(diag)
+  cols <- 1:coldim
+  rows <- 1:rowdim
+  maxdim <- max(length(rows), length(cols))
+  plt <- par('plt')
+  xlabwidth <- max(strwidth(rowlabs[rows], units = 'figure', cex = cex.lab))/(plt[2] - plt[1])
+  xlabwidth <- xlabwidth * maxdim/(1 - xlabwidth)
+  ylabwidth <- max(strwidth(collabs[cols], units = 'figure', cex = cex.lab))/(plt[4] - plt[3])
+  ylabwidth <- ylabwidth * maxdim/(1 - ylabwidth)
+  plot(c(-xlabwidth - 0.5, maxdim + 0.5), c(0.5, maxdim + 1 + ylabwidth), type = 'n', bty = bty, axes = axes, xlab = '', ylab = '', asp = asp, cex.lab = cex.lab, ...)
+  text(rep(0, length(rows)), length(rows):1, labels = rowlabs[rows], adj = 1, cex = cex.lab)
+  text(cols, rep(length(rows) + 1, length(cols)), labels = collabs[cols], srt = 90, adj = 0, cex = cex.lab)
+  mtext(xlab, 1, 0)
+  mtext(ylab, 2, 0)
+  mat <- diag(c(1, 1))
+  plotcorrInternal <- function() {
+    if (i == j){ #diag behavior
+      if (diag == 'none'){
+        return()
+      } else if (diag == 'number'){
+        text(j + 0.3, length(rows) + 1 - i, round(corr[i, j], digits=digits), adj = 1, cex = cex)
+      } else if (diag == 'ellipse') {
+        mat[1, 2] <- corr[i, j]
+        mat[2, 1] <- mat[1, 2]
+        ell <- ellipse(mat, t = 0.43)
+        ell[, 1] <- ell[, 1] + j
+        ell[, 2] <- ell[, 2] + length(rows) + 1 - i
+        polygon(ell, col = col[i, j])
+        if (outline)
+          lines(ell)
+      }
+    } else if (i >= j){ #lower half of plot
+      if (lower.panel == 'ellipse') { #check if ellipses should go here
+        mat[1, 2] <- corr[i, j]
+        mat[2, 1] <- mat[1, 2]
+        ell <- ellipse(mat, t = 0.43)
+        ell[, 1] <- ell[, 1] + j
+        ell[, 2] <- ell[, 2] + length(rows) + 1 - i
+        polygon(ell, col = col[i, j])
+        if (outline)
+          lines(ell)
+      } else if (lower.panel == 'number') { #check if ellipses should go here
+        text(j + 0.3, length(rows) + 1 - i, round(corr[i, j], digits=digits), adj = 1, cex = cex)
+      } else {
+        return()
+      }
+    } else { #upper half of plot
+      if (upper.panel == 'ellipse') { #check if ellipses should go here
+        mat[1, 2] <- corr[i, j]
+        mat[2, 1] <- mat[1, 2]
+        ell <- ellipse(mat, t = 0.43)
+        ell[, 1] <- ell[, 1] + j
+        ell[, 2] <- ell[, 2] + length(rows) + 1 - i
+        polygon(ell, col = col[i, j])
+        if (outline)
+          lines(ell)
+      } else if (upper.panel == 'number') { #check if ellipses should go here
+        text(j + 0.3, length(rows) + 1 - i, round(corr[i, j], digits=digits), adj = 1, cex = cex)
+      } else {
+        return()
+      }
+    }
+  }
+  for (i in 1:dim(corr)[1]) {
+    for (j in 1:dim(corr)[2]) {
+      plotcorrInternal()
+    }
+  }
+  invisible()
+}
+
+
+data(iris)
+
+corr.iris <- iris
+corr.iris$Species <- NULL
+corr.iris <- cor(corr.iris)
+
+colnames(corr.iris) <- c('Sepal.Length', 'Sepal.Width', 'Petal.Length', 'Petal.Width')
+rownames(corr.iris) <- colnames(corr.iris)
+
+colsc=c(rgb(241, 54, 23, maxColorValue=255), 'white', rgb(0, 61, 104, maxColorValue=255))
+colramp = colorRampPalette(colsc, space='Lab')
+colors = colramp(100)
+
+my.plotcorr(corr.iris, col=colors[((corr.iris + 1)/2) * 100], upper.panel='number', mar=c(0,2,0,0))
+
+
+
+for(package in c('ggplot2', 'grid', 'gridExtra', 'gtable', 'pryr')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+plot1 <- ggplot(data = iris,
+  aes(x = Petal.Length, y = Sepal.Length)) + 
+  geom_point(aes(color = Species), position = 'jitter', alpha = 0.5) +
+  labs(x='Petal.Length (cm)', y='Sepal.Length (cm)') +
+  geom_smooth(method = 'lm')
+  #theme(legend.position = 'bottom')
+
+plot2 <- ggplot(data = iris,
+  aes(x = Petal.Width, y = Sepal.Width)) + 
+  geom_point(aes(color = Species), position = 'jitter', alpha = 0.5) +
+  labs(x='Petal.Width (cm)', y='Sepal.Width (cm)') +
+  geom_smooth(formula = y ~ x)
+  #theme(legend.position = 'bottom')
+
+legend <- gtable_filter(ggplot_gtable(ggplot_build(plot1 + theme(legend.position='bottom'))), 'guide-box')
+lheight <- sum(legend$height)
+theight <- unit(12, 'points')
+p <- arrangeGrob(plot1 + theme(legend.position='none'), 
+                 plot2 + theme(legend.position='none'), 
+                 ncol=2)
+p <- arrangeGrob(p, textGrob(gp=gpar(fontsize=12)), 
+                 heights=unit.c(unit(1, 'npc') - theight, theight))
+p <- arrangeGrob(p, legend, 
+                 heights=unit.c(unit(1, 'npc') - lheight, lheight), ncol=1)
+
+raw_a <- matrix(c('cm', 'cm', 'cm', 'cm', 
+                  150, 150, 150, 150,
+                  '', '', '', '',
+                  format(round(min(iris$Sepal.Length), 2), nsmall=2),
+                  format(round(min(iris$Sepal.Width), 2), nsmall=2), 
+                  format(round(min(iris$Petal.Length),2), nsmall=2),
+                  format(round(min(iris$Petal.Width), 2), nsmall=2),
+                  format(round(max(iris$Sepal.Length), 2), nsmall=2),
+                  format(round(max(iris$Sepal.Width), 2), nsmall=2), 
+                  format(round(max(iris$Petal.Length), 2), nsmall=2),
+                  format(round(max(iris$Petal.Width), 2), nsmall=2),
+                  format(round(mean(iris$Sepal.Length), 2), nsmall=2), 
+                  format(round(mean(iris$Sepal.Width), 2), nsmall=2),
+                  format(round(mean(iris$Petal.Length), 2), nsmall=2),
+                  format(round(mean(iris$Petal.Width), 2), nsmall=2),
+                  '', '', '', '',
+                  format(round(sd(iris$Sepal.Length), 2), nsmall=2),
+                  format(round(sd(iris$Sepal.Width), 2), nsmall=2),
+                  format(round(sd(iris$Petal.Length), 2), nsmall=2),
+                  format(round(sd(iris$Petal.Width), 2), nsmall=2),
+                  format(round(mean(iris$Sepal.Length) / sd(iris$Sepal.Length), 2), nsmall=2),
+                  format(round(mean(iris$Sepal.Width) / sd(iris$Sepal.Width), 2), nsmall=2),
+                  format(round(mean(iris$Petal.Length) / sd(iris$Petal.Length), 2), nsmall=2),
+                  format(round(mean(iris$Petal.Width) / sd(iris$Petal.Width), 2), nsmall=2)), 
+                ncol=4, byrow=TRUE)
+colnames(raw_a) <- c('Sepal.Length', 'Sepal.Width', 'Petal.Length', 'Petal.Width')
+rownames(raw_a) <- c('Units', 'No.Obs', '', 'Min', 'Max', 'Mean', ' ', 'Std.Dev', 'Coeff.Var')
+df_a = data.frame(raw_a)
+print(df_a)
+
+
+png('images/iris_improved.png', 
+  width = 1600, height = 1600, res = 175)
+
+mytheme <- gridExtra::ttheme_default(
+    core = list(fg_params=list(cex = 0.8)),
+    colhead = list(fg_params=list(cex = 0.8)),
+    rowhead = list(fg_params=list(cex = 0.8)))
+
+layout(matrix(c(1,2,3,4), nrow = 2, ncol = 2, byrow = TRUE))
+plot.new()
+grid.arrange(arrangeGrob(tableGrob(df_a, theme = mytheme),
+                         grobTree(my.plotcorr(corr.iris, col=colors[((corr.iris + 1)/2) * 100],
+                                  upper.panel='number', 
+                                  mar=c(0,2,0,0))), 
+                         ncol=2),
+             p, top=textGrob('Iris Flower Dataset Snapshot', 
+                             gp=gpar(fontsize=20, font=8)), ncol=1)
+
+dev.off()
+```
+
+Ultimately, I found R to be quite limiting in terms of its ability to translate free floating ideas into a final visualization. Some of the ideas I had throughout this process were either difficult to implement (combining embedded with object based graphics into the same grid visualization), or were not able to be achieved at all (adding an overlay of comments/speech bubble to the plots to highlight noteworthy trends or relationships). Clearly the visualizer should weigh the benefits of using a statistical package such as R to generate their visualization versus solutions which may provide greater flexibility such as Powerpoint or direct to canvas graphical programs.
+
+# 4 Conclusion
+
+The practice of preparing visualizations could be considered more of an art than of a science. Although there are a number of guides which dictate 'best practice' rules, a great deal of subjectivity still remains for the visualizer to determine how the visualization should be structured and delivered. For this assessment, I set out to correct a number of shortcomings present in a correlation visualization of the Iris dataset. I believe I was successful in addressing these shortcomings, however I did find R to be quite limiting in terms of its flexibility in producing 'non-standard' visualizations.
+
+\newpage
+
+# Appendix A Figure Output
+
+### Figure A1 Original Iris Scatterplot Matrix
+
+#![Original Iris Scatterplot Matrix](images/iris_original.png 'Iris Scatterplot Matrix Original]'){#id .class height=1200px}
+
+\newpage
+
+### Figure A2 Improved Iris Scatterplot Matrix
+
+#![Improved Iris Scatterplot Matrix](images/iris_improved.png 'Iris Scatterplot Matrix Improved]'){#id .class height=1200px}
+
+\newpage
+
+# References

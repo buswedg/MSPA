@@ -1,0 +1,120 @@
+* Data exploration;
+
+%MACRO histogram(varname);
+	PROC sgplot DATA = &data_def.;
+		TITLE1 "Histogram Plot: &varname.";
+		TITLE2 "with normal and kernel density estimates";
+		HISTOGRAM &varname. / TRANSPARENCY = 0.5;
+		DENSITY &varname. / TYPE = normal;
+		DENSITY &varname. / TYPE = kernel;
+	RUN; QUIT;
+%MEND;
+
+%MACRO box(varname);
+	PROC sgplot DATA = &data_def.;
+		TITLE1 "Box Plot: &varname.";
+		TITLE2 "";
+		vbox &varname.;
+	RUN; QUIT;
+%MEND;
+
+%MACRO scatter(varname);
+	ODS graphics ON / LOESSMAXOBS = 5000;
+		
+	PROC sgscatter DATA = &data_def.;
+		TITLE1 "Scatter Plot: &response. vs. &varname.";
+		TITLE2 "with LOESS smoother";
+		COMPARE y = &response. x = &varname. / LOESS REG;
+	RUN; QUIT;
+		
+	ODS graphics OFF;
+%MEND;
+
+TITLE1 '';
+TITLE2 '';
+
+DATA &data._expl(DROP = &key.);
+	SET &data._name;
+RUN; QUIT;
+
+PROC CONTENTS DATA = &data._expl OUT = &contents._expl;
+RUN; QUIT;
+
+DATA &contents._expl;
+	SET &contents._expl;
+		IF name = "&key." then DELETE;
+RUN; QUIT;
+
+%LET data_def = &data._expl;
+
+DATA _null_;
+	DO i = 1 to NUM;
+		SET &contents._expl NOBS = NUM;
+			WHERE type = 1;
+				CALL EXECUTE('%histogram('||name||')');
+				CALL EXECUTE('%box('||name||')');
+				CALL EXECUTE('%scatter('||name||')');
+	END;
+RUN; QUIT;
+
+PROC MEANS DATA = &data._expl MIN P1 P5 P10 P25 P50 P75 P90 P95 P99 MAX;
+RUN; QUIT;
+
+PROC CONTENTS DATA = &data._expl OUT = &contents._expl;
+RUN; QUIT;
+
+
+
+* Data correlations;
+
+%MACRO cleancorr(varname);
+	DATA &data_def.;
+		SET &data_def.;
+		IF _name_ = "N&varname." then DELETE;
+		IF _name_ = "P&varname." then DELETE;
+	RUN; QUIT;
+%MEND;
+
+TITLE1 '';
+TITLE2 '';
+
+DATA &data._corr(DROP = &key.);
+	SET &data._name;
+RUN; QUIT;
+
+PROC CONTENTS DATA = &data._corr OUT = &contents._corr;
+RUN; QUIT;
+
+ODS TRACE ON;
+
+ODS OUTPUT PearsonCorr = &data._corr_wide;
+PROC CORR DATA = &data._corr;
+	VAR N_:;
+	WITH &response.;
+RUN; QUIT;
+
+ODS TRACE OFF;
+
+* Note that wide_correlations is a 'wide' data set and we need a 'long' data set;
+* We can use PROC TRANSPOSE to convert data from one format to the other;
+
+PROC TRANSPOSE DATA = &data._corr_wide OUT = &data._corr_long;
+RUN; QUIT;
+
+%LET data_def = &data._corr_long;
+
+DATA _null_;
+	DO i = 1 to NUM;
+		SET &contents._corr NOBS = NUM;
+			CALL EXECUTE('%cleancorr('||name||')');
+	END;
+RUN; QUIT;
+
+DATA &data._corr_long;
+	SET &data._corr_long;
+	RENAME _NAME_ = Variable;
+	RENAME COL1 = correl;
+RUN; QUIT;
+
+PROC PRINT DATA = &data._corr_long;
+RUN; QUIT;

@@ -1,0 +1,14 @@
+Model
+  Variables
+	x[1] = 0, >=0, <=99999
+	tr[1] = 0, >=0, <=99999
+	tc[1] = 0, >=0, <=99999
+  End Variables
+
+  Equations
+	27 * log(6 * x[1] + 1) = tr[1]
+	x[1] / 7 = tc[1]
+
+	maximize  tr[1] - tc[1]
+  End Equations
+End Model

@@ -1,0 +1,336 @@
+#---
+#output: 
+#  pdf_document:
+#    pandoc_args: [
+#      "--template=A8_template.latex",
+#      "--bibliography=A8_template.bib"
+#    ]
+#---
+# MSPA PREDICT 410-DL-58 LEC 
+# Assignment 8: Cluster Analysis
+## Darryl Buswell
+
+&nbsp;
+
+# 1 Introduction
+
+This document presents results of the eighth assignment for the Masters of Science in Predictive Analytics course: PREDICT 410. For this assessment, cluster analysis is used for exploratory data analysis of a set of European employment data.
+
+# 2 Data
+
+Load the dataset.
+
+~~~{.fortran}
+LIBNAME mydata '/scs/crb519/PREDICT_410/SAS_Data/' ACCESS=readonly;
+
+DATA euro;
+	SET mydata.european_employment;
+RUN; QUIT;
+
+PROC CONTENTS DATA=euro ORDER=VARNUM OUT=euro_cont; RUN; QUIT;
+~~~
+
+Dataset includes percentage employment rates for various industry segments, for thirty European nations.
+
+# 3 Cluster Analysis
+
+## 3.1 Initial Correlation Analysis
+
+~~~{.fortran}
+ODS graphics ON;
+
+PROC SGPLOT DATA=euro;
+  TITLE 'Scatterplot of Raw Data';
+  SCATTER y=Yvar x=Xvar / DATALABEL=country GROUP=group;
+RUN; QUIT;
+
+ODS graphics OFF;
+~~~
+
+## 3.2 Principle Component Analysis
+
+~~~{.fortran}
+ODS graphics ON;
+
+TITLE Principal Components Analysis using PROC PRINCOMP;
+PROC PRINCOMP DATA=euro OUT=pca_9components OUTSTAT=eigenvectors PLOTS=all;
+RUN; QUIT;
+
+ODS graphics OFF;
+~~~
+
+| Observation | Eigenvalue | Difference | Proportion | Cumulative |
+|-------------|------------|------------|------------|------------|
+| 1           | 3.11225795 | 1.30302071 | 0.3458     | 0.3458     |
+| 2           | 1.80923724 | 0.31301704 | 0.2010     | 0.5468     |
+| 3           | 1.49622020 | 0.43277636 | 0.1662     | 0.7131     |
+| 4           | 1.06344384 | 0.35318631 | 0.1182     | 0.8312     |
+| 5           | 0.71025753 | 0.39891874 | 0.0789     | 0.9102     |
+| 6           | 0.31133879 | 0.01791787 | 0.0346     | 0.9448     |
+| 7           | 0.29342091 | 0.08960446 | 0.0326     | 0.9774     |
+| 8           | 0.20381645 | 0.20380935 | 0.0226     | 1.0000     |
+| 9           | 0.00000710 | 0.0000     | 1.0000     | -          |
+
+
+|     | Prin1    | Prin2    | Prin3    | Prin4    | Prin5    | Prin6    | Prin7    | Prin8    | Prin9    |
+|-----|----------|----------|----------|----------|----------|----------|----------|----------|----------|
+| AGR | -.511492 | 0.023475 | -.278591 | 0.016492 | -.024038 | 0.042397 | -.163574 | 0.540409 | 0.582036 |
+| MIN | -.374983 | -.000491 | 0.515052 | 0.113606 | 0.346313 | -.198574 | 0.212590 | -.448592 | 0.418818 |
+| MAN | 0.246161 | -.431752 | -.502056 | 0.058270 | -.233622 | 0.030917 | 0.236015 | -.431757 | 0.447086 |
+| PS  | 0.316120 | -.109144 | -.293695 | 0.023245 | 0.854448 | -.206471 | -.060565 | 0.155122 | 0.030251 |
+| CON | 0.221599 | 0.242471 | 0.071531 | 0.782666 | 0.062151 | 0.502636 | -.020285 | 0.030823 | 0.128656 |
+| SER | 0.381536 | 0.408256 | 0.065149 | 0.169038 | -.266673 | -.672694 | 0.174839 | 0.201753 | 0.245021 |
+| FIN | 0.131088 | 0.552939 | -.095654 | -.489218 | 0.131288 | 0.405935 | 0.457645 | -.027264 | 0.190758 |
+| SPS | 0.428162 | -.054706 | 0.360159 | -.317243 | -.045718 | 0.158453 | -.621330 | -.041476 | 0.410315 |
+| TC  | 0.205071 | -.516650 | 0.412996 | -.042063 | -.022901 | 0.141898 | 0.492145 | 0.502124 | 0.060743 |
+
+Would use the first five principal components to explain greater than 90% of the variability.
+
+
+## 3.3 Cluster Analysis
+
+Begin discussion of cluster analysis by making a pair of scatterplots.
+
+~~~{.fortran}
+ODS graphics ON;
+
+PROC SQPLOT DATA=euro;
+  TITLE 'Scatterplot of Raw Data: FIN*SER';
+  SCATTER y=fin x=ser / DATALABEL=country GROUP=group;
+RUN; QUIT;
+
+ODS graphics OFF;
+
+ODS graphics ON;
+
+PROC SQPLOT DATA=euro;
+  TITLE 'Scatterplot of Raw Data: MAN*SER';
+  SCATTER y=man x=ser / DATALABEL=country GROUP=group;
+RUN; QUIT;
+
+ODS graphics OFF;
+~~~
+
+There are some outlier countriers, but in both graphs the Eastern group seems to cluster, where as the EU and EFTA groups seem to cluster.
+
+Albania and Gibralta both seem to be outliers.
+
+Use PROC CLUSTER to create a set of clusters algorithmically.
+
+~~~{.fortran}
+ODS graphics ON;
+
+PROC CLUSTER DATA=euro METHOD=average OUTTREE=tree1 pseudo ccc PLOTS=all;
+  VAR fin ser;
+  ID country;
+RUN; QUIT;
+
+ODS graphics OFF;
+~~~
+
+For Cubic Clustering Criterion, 
+
+Peaks on the plot with the CCC greater than 2 or 3 indicate good clusterings.
+
+Peaks with the CCC between 0 and 2 indicate possible clusters.
+
+There may be several peaks if the data has a hierarchical structure.
+
+For Pseudo F we need only look for a relatively large value.
+
+From this we conclude (between the CCC and Pseudo F) that we would be likely happy with at-least three clusters.
+
+Use PROC TREE to assign our data to a set number of clusters.
+
+~~~{.fortran}
+ODS graphics ON;
+
+PROC TREE DATA=tree1 ncl=4 OUT=_4_clusters;
+  COPY fin ser;
+RUN; QUIT;
+
+ODS graphics OFF;
+
+ODS graphics ON;
+
+PROC TREE DATA=tree1 ncl=3 OUT=_3_clusters;
+  COPY fin ser;
+RUN; QUIT;
+
+ODS graphics OFF;
+~~~
+
+The table below shows the frequency groupings with two clusters,
+
+| Group   | Albania | CL3 | CL6 | Total |
+|---------|---------|-----|-----|-------|
+| EFTA    | 0       | 6   | 0   | 6     |
+| EU      | 0       | 12  | 0   | 12    |
+| Eastern | 1       | 0   | 7   | 8     |
+| Other   | 0       | 2   | 2   | 4     |
+| Total   | 1       | 20  | 9   | 30    |
+
+The table below shows the frequency groupings with three clusters,
+
+| Group   | Albania | CL4 | CL5 | CL6 | Total |
+|---------|---------|-----|-----|-----|-------|
+| EFTA    | 0       | 5   | 1   | 0   | 6     |
+| EU      | 0       | 10  | 2   | 0   | 12    |
+| Eastern | 1       | 0   | 0   | 7   | 8     |
+| Other   | 0       | 1   | 1   | 2   | 4     |
+| Total   | 1       | 16  | 4   | 9   | 30    |
+
+Use macro to make tables displaying the assignment of the observations to the determined clusters.
+
+~~~{.fortran}
+* Define macro;
+
+%MACRO makeTable(treeout,group,outdata);
+DATA tree_data;
+  SET &treeout.(rename=(_name_=country));
+RUN; QUIT;
+
+PROC SORT DATA=tree_data; BY country; RUN; QUIT
+
+DATA group_affiliation;
+  SET &group.(keep=group country);
+RUN; QUIT;
+
+PROC SORT DATA=group_affiliation; BY country; RUN; QUIT
+
+DATA &outdata.;
+  MERGE tree_data group_affiliation; BY country;
+RUN; QUIT;
+
+PROC FREQ DATA=&outdata.;
+  TABLE group*clusname / nopercent norow nocol;
+RUN; QUIT;
+
+%mend makeTable;
+
+
+* Call macro function;
+
+%makeTable(treeout=_3_clusters, GROUP=temp, OUTDATA=_3_clusters_with_labels);
+
+
+* Plot the clusters for a visual display;
+
+ODS graphics ON;
+
+PROC SGPLOT DATA=_3_clusters_with_labels;
+  TITLE 'Scatterplot of Raw Data';
+  SCATTER y=fin x=ser / DATALABEL=country GROUP=clusname;
+RUN; QUIT;
+
+ODS graphics OFF;
+
+%makeTable(treeout=_4_clusters, GROUP=temp, OUTDATA=_4_clusters_with_labels);
+
+
+* Plot the clusters for a visual display;
+
+ODS graphics ON;
+
+PROC SGPLOT DATA=_4_clusters_with_labels;
+  TITLE 'Scatterplot of Raw Data';
+  SCATTER y=fin x=ser / DATALABEL=country GROUP=clusname;
+RUN; QUIT;
+
+ODS graphics OFF;
+~~~
+
+Perform cluster analysis with two principle components.
+
+~~~{.fortran}
+ODS graphics ON;
+
+PROC CLUSTER DAYA=pca_9components METHOD=average OUTTREE=tree3 pseudo ccc PLOTS=all;
+  var prin1 prin2;
+  id country;
+RUN; QUIT;
+
+ODS graphics OFF;
+
+ODS graphics ON;
+
+PROC TREE DATA=tree3 ncl=4 OUT=_4_clusters;
+  copy prin1 prin2;
+RUN; QUIT;
+
+PROC TREE DATA=tree3 ncl=3 OUT=_3_clusters;
+  copy prin1 prin2;
+RUN; QUIT;
+
+ODS graphics OFF;
+
+
+* Call macro function;
+
+%makeTable(treeout=_3_clusters, GROUP=temp, OUTDATA=_3_clusters_with_labels);
+%makeTable(treeout=_4_clusters, GROUP=temp, OUTDATA=_4_clusters_with_labels);
+
+
+* Plot the clusters for a visual display;
+
+ODS graphics ON;
+
+PROC SGPLOT DATA=_3_clusters_with_labels;
+  TITLE 'Scatterplot of Raw Data';
+  SCATTER y=prin2 x=prin1 / DATALABEL=country GROUP=clusname;
+RUN; QUIT;
+
+ODS graphics OFF;
+
+%makeTable(treeout=_4_clusters, GROUP=temp, OUTDATA=_4_clusters_with_labels);
+
+
+* Plot the clusters for a visual display;
+
+ODS graphics ON;
+
+PROC SGPLOT DATA=_4_clusters_with_labels;
+  TITLE 'Scatterplot of Raw Data';
+  SCATTER y=prin2 x=prin1 / DATALABEL=country GROUP=clusname;
+RUN; QUIT;
+
+ODS graphics OFF;
+
+
+* Call macro function;
+
+%makeTable(treeout=_3_clusters, GROUP=temp, OUTDATA=_3_clusters_with_labels);
+%makeTable(treeout=_4_clusters, GROUP=temp, OUTDATA=_4_clusters_with_labels);
+~~~
+
+The table below shows the frequency groupings with three cluster tree,
+
+| Group   | Albania | CL3 | Gibralta | Total |
+|---------|---------|-----|----------|-------|
+| EFTA    | 0       | 6   | 0        | 6     |
+| EU      | 0       | 12  | 0        | 12    |
+| Eastern | 1       | 7   | 0        | 8     |
+| Other   | 0       | 3   | 1        | 4     |
+| Total   | 1       | 28  | 1        | 30    |
+
+The table below shows the frequency groupings with four cluster tree,
+
+| Group   | Albania | CL4 | CL5 | Gibralta | Total |
+|---------|---------|-----|-----|----------|-------|
+| EFTA    | 0       | 6   | 0   | 0        | 6     |
+| EU      | 0       | 12  | 0   | 0        | 12    |
+| Eastern | 1       | 4   | 3   | 0        | 8     |
+| Other   | 0       | 2   | 1   | 1        | 4     |
+| Total   | 1       | 24  | 4   | 1        | 30    |
+
+Using the principal components data set seems to have pushed our clustering towards accentuating the outlier members within the data. 
+
+# 4 Conclusion
+
+\newpage
+
+# Appendix A SAS Procedure
+
+\newpage
+
+# References

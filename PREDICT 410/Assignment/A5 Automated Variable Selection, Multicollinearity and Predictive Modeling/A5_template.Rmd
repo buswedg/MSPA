@@ -1,0 +1,1130 @@
+---
+output: 
+  pdf_document:
+    pandoc_args: [
+      "--template=A5_template.latex",
+      "--bibliography=A5_template.bib"
+    ]
+---
+# MSPA PREDICT 410-DL-58 LEC 
+# Assignment 5: Automated Variable Selection, Multicollinearity and Predictive Modeling
+## Darryl Buswell
+
+&nbsp;
+
+# 1 Introduction
+
+This document presents results of the fifth assignment for the Masters of Science in Predictive Analytics course: PREDICT 410. This assessment required the student to build a regression model which predicts property prices in Ames, Iowa. To find the 'best' predictive model for property prices, this assessment employs a number of automated variable selection techniques with the resultant model specifications assessed over a range of performance criteria. The automated variable selection techniques included the adjusted R Squared, MaxR, Mallow's Cp, forward, backwards, and stepwise variable selection methods, while assessment of these specifications included an investigation of included/excluded predictor variables and a comparative assessment of a number of performance metrics, including Mean Square Error (MSE), Mean Absolute Error (MAE), Adjusted R-square, Akaike Information Criterion (AIC), and Bayesian Information Criterion (BIC). Finally, an operational validation of each specification was conducted based on a grading of prediction accuracy for each specification.
+
+# 2 Data
+
+The Ames, Iowa property dataset is published in the Journal of Statistics Education [@decock2011]. The dataset contains variables which focus on physical property attributes, including 20 continuous, 14 discrete, 23 nominal and 23 ordinal variable types. [@decock2011] notes that the continuous variables tend to relate to area dimensions for each property, discrete variables tend to quantify the number of items in each property, and categorical variables identify a range of attributes for each property, such as the type of street and neighborhood in which the property is located.
+
+# 3 Build a Linear Regression Model
+
+## 3.1 Define the Sample Population
+
+The purpose of this assessment is to build a regression model which predicts property prices. However, judging by the scope of variables and range of observations in the dataset, it is quite clear that the raw dataset does in fact accommodate a number of different property types. We should be cautious in using such a dataset in its raw form, as our fitted regression models may be forced to explain relationships for properties which can be considered 'non-typical'.
+
+As a first pass, we can define a sample set of the raw data which only includes observations for properties which we consider 'typical'. To do this, we first create a waterfall statement which filters out records based on unwanted values. The SAS procedure for this waterfall is shown in Appendix A. Based on a review of the dataset documentation, I have chosen to remove records based on four criteria:
+
+- Non-typical Function: Remove if record has been identified as a non-normal property or with greater than minimal deductions.
+- Non-typical Residential Zoning: Remove if property has not been zoned as residential.
+- Built 1940 & Older: Remove if property was built in 1940 or earlier.
+- Non-typical Sale: Remove if property was not sold under 'normal' sale conditions.
+
+A table summarizing both the dropped records, and retained 'sample population' is shown below.
+
+### Table 3.1.1: Non-Typical Waterfall Results
+
+| drop_condition                 | Frequency | Percent | Cumulative Frequency | Cumulative Percent |
+|--------------------------------|-----------|---------|----------------------|--------------------|
+| 01: Non-typical Function       | 202       | 6.89    | 202                  | 6.89               |
+| 02: Non-typical Residential Zo | 159       | 5.43    | 361                  | 12.32              |
+| 03: Built 1940 & Older         | 438       | 14.95   | 799                  | 27.27              |
+| 04: Non-typical Sale           | 376       | 12.83   | 1175                 | 40.1               |
+| 05: Sample Population          | 1755      | 59.9    | 2930                 | 100                |
+  
+As a result of this procedure, we have removed 1,175 records (or 40.1%) of the original dataset.
+
+## 3.2 Create a Train/Test Split
+
+The data is then split into a training and testing subset, with the model subsequently fit to the training subset and evaluated over both the training and testing subsets. By splitting the data, we are able to avoid overfitting models to the data, which may lead to high variance and poor out-of-sample model performance [@Mont2012]. A 70% training and 30% test set split is applied. The SAS routine used to create this split is shown in Appendix A.
+
+A table summarizing the split between training and test data is shown below.
+
+### Table 3.2.1 Train/Test Split Observations
+
+| Split | Frequency | Percent | Cumulative Frequency | Cumulative Percent |
+|-------|-----------|---------|----------------------|--------------------|
+| Test  | 544       | 31.00   | 544                  | 31.00              |
+| Train | 1211      | 69.00   | 1755                 | 100.00             |
+
+## 3.3 Model Identification
+
+In this section, we employ a number of automated variable selection techniques and find the 'best' fit model in each case. Each selection technique is limited to selecting from continuous type variables, as well as a selection of discrete type variables which have been coded to indicator (dummy) variables. Discrete variables which have been coded to dummy variables include:
+
+### Table 3.3.1 Coded Dummy Variables
+
+| Dummy Variable    | Criteria                                                    |
+|-------------------|-------------------------------------------------------------|
+| YearBuiltle70_ind | IF YearBuilt <= 1970 THEN '1' ELSE '0'                      |
+| YearBuilt7095_ind | IF YearBuilt > 1970 AND YearBuilt <= 1995 THEN '1' ELSE '0' |
+| YearBuiltgt95_ind | IF YearBuilt > 1995 THEN '1' ELSE '0'                       |
+| BedroomAbvGrH_ind | IF BedroomAbvGr > 3, THEN '1' ELSE '0'                      |
+| BedroomAbvGrM_ind | IF BedroomAbvGr = 3 THEN '1' ELSE '0'                       |
+| BedroomAbvGrL_ind | IF BedroomAbvGr < 3 THEN '1' ELSE '0'                       |
+| FullBathH_ind     | IF FullBath >= 2 THEN '1' ELSE '0'                          |
+| FullBathL_ind     | IF FullBath < 2 THEN '1' ELSE '0'                           |
+| GarageCarsH_ind   | IF GarageCars > 2 THEN '1' ELSE '0'                         |
+| GarageCarsM_ind   | IF GarageCars = 2 THEN '1' ELSE '0'                         |
+| GarageCarsL_ind   | IF GarageCars < 2 THEN '1' ELSE '0'                         |
+
+Do note that the continuous variable 'LotFrontage' was excluded from the sample dataset due to a high number of missing observations (n=368).
+
+### 3.3.1 AVS: Adjusted R-Squared
+
+The adjusted R-squared selection technique finds subsets of independent variables that 'best' predict the dependent variable. 'Best' is defined by this technique as the model which produces the highest adjusted R-squared value [@Sasi2016]. This technique is applied to the training set of data, with the resulting model (Model_AdjR2) shown below.
+
+Parameter estimates for Model_AdjR2 are also shown below.
+
+### Table 3.3.1.1: Model AdjR2 Parameter Estimates (Training Set)
+
+| Variable          | DF | Parameter Estimate | Standard Error | t Value | $\text{Pr} > |t|$ | VIF     |
+|-------------------|----|--------------------|----------------|---------|-------------------|---------|
+| Intercept         | 1  | -10858             | 3588.77313     | -3.03   | 0.0025            | 0       |
+| BsmtFinSF1        | 1  | 49.58414           | 3.55558        | 13.95   | <.0001            | 3.49084 |
+| BsmtFinSF2        | 1  | 40.45990           | 5.23588        | 7.73    | <.0001            | 1.55655 |
+| BsmtUnfSF         | 1  | 16.95527           | 3.47258        | 4.88    | <.0001            | 3.56733 |
+| EnclosedPorch     | 1  | 27.07593           | 18.84760       | 1.44    | 0.1511            | 1.05864 |
+| FirstFlrSF        | 1  | 81.22358           | 3.82236        | 21.25   | <.0001            | 3.14031 |
+| GarageArea        | 1  | 14.09912           | 6.43184        | 2.19    | 0.0286            | 2.22255 |
+| LotArea           | 1  | 0.61646            | 0.09956        | 6.19    | <.0001            | 1.14365 |
+| MasVnrArea        | 1  | 37.36705           | 5.17951        | 7.21    | <.0001            | 1.43963 |
+| OpenPorchSF       | 1  | 36.94403           | 15.09965       | 2.45    | 0.0146            | 1.17685 |
+| ScreenPorch       | 1  | 43.91601           | 13.42276       | 3.27    | 0.0011            | 1.08696 |
+| SecondFlrSF       | 1  | 63.20806           | 2.42677        | 26.05   | <.0001            | 1.62550 |
+| WoodDeckSF        | 1  | 36.90414           | 6.74126        | 5.47    | <.0001            | 1.23171 |
+| YearBuilt7095_ind | 1  | 14404              | 2152.18557     | 6.69    | <.0001            | 1.52967 |
+| YearBuiltgt95_ind | 1  | 40733              | 2452.50217     | 16.61   | <.0001            | 1.95516 |
+| GarageCarsH_ind   | 1  | 30834              | 3351.30163     | 9.20    | <.0001            | 1.92846 |
+
+For Model_AdjR2, the majority of coefficient estimates have significant p-values at the 95% level, with the only exception being the coefficient estimate for 'EnclosedPorch'. We reject the null hypothesis for all other estimates and conclude that each have non-zero coefficients. We also note that the polarity of coefficient estimates for each variable seems reasonable, suggesting that an increase in any variable (whilst holding all other variables constant) would translate to an increase in sale price. The three included dummy variables also suggest a positive shift in intercept, with properties built after 1995 ('YearBuiltgt95_ind') tending to attract a higher sale price than those built between 1970 and 1995 ('YearBuiltgt95_ind'), and those properties which have greater than two garage spaces ('GarageCarsH_ind') also attracting a higher sale price than those which have less than two garage spaces. Finally, the Variance Inflation Factor (VIF) is shown for each variable in the table above, which can be used to identify collinearity between predictor variables [@cody2011]. The VIF is found by regressing all other predictor variables within the original specification against the variable in question, and applying the formula [@cody2011]. 
+
+$$ \text{VIF}_i=\frac{1}{(1-R_i^2)} $$ 
+
+We refer to [@Mini2016], which puts forward a guideline for interpreting VIF factors. According to this guideline, a VIF value of one suggests that the predictor variable is not correlated with other predictors, a VIF between one and five suggests moderate correlation, and finally, a VIF between five and ten suggest high correlation. Using this guide, we note that all variables for the above specification are suggested to have low to moderate correlation.
+
+Goodness-of-fit information for Model_AdjR2 is shown below.
+
+### Table 3.3.1.2: Model AdjR2 Analysis of Variance (Training Set)
+
+| Source          | DF   | Sum of Squares | Mean Square | F Value | Pr > F |
+|-----------------|------|----------------|-------------|---------|--------|
+| Model           | 15   | 5.782843E12    | 3.855229E11 | 487.50  | <.0001 |
+| Error           | 1188 | 9.394903E11    | 790816773   |         |        |
+| Corrected Total | 1203 | 6.722334E12    |             |         |        |
+
+As shown in Table 3.3.1.2, the model reported a large F-value which suggests that the observations and regression differ from the grand mean. Likewise, the F-value has a highly significant p-value under the null hypothesis that there is no linear relationship between the predictor and response variable. This allows us to reject the null hypothesis in each case and conclude that there is a linear relationship between sale price and the included predictor variables.
+
+Model performance statistics over the training set for Model_AdjR2 are shown below.
+
+### Table 3.3.1.3: Model AdjR2 Performance Metrics (Training Set)
+
+| Measure        | Value     | Measure  | Value      |
+|----------------|-----------|----------|------------|
+| MSE            | 790816773 | R-Square | 0.8622     |
+| MAE            | 19919.13  | Adj R-Sq | 0.8605     |
+| Root MSE       | 28121     | C(p)     | 16.0000    |
+| Dependent Mean | 186614    | AIC      | 24684.1393 |
+| Coeff Var      | 15.06934  | BIC      | 24686.5699 |
+
+The R-square value above suggests that Model_AdjR2 explains ~86% of the variability in sale price using each of the included predictor variables. The adjusted R-squared value also indicates a similar level of explanatory power, which forms the metric by which this automated variable selection technique is optimized. The AIC, BIC and Mallow's Cp (C(p)) are also reported above. Both AIC and BIC form a model selection criteria which looks to assess goodness of fit of the model. These metrics will be used to assess the above model against models formed from alternative automated selection techniques below. Mallows' Cp on the other hand, is able to balance the number of predictor variables included within a model. A Mallows' Cp value which is close to the number of included predictors plus the constant suggests that the model is relatively unbiased [@Mont2012]. In this case, the reported Mallows' Cp value of 16 confirms that Model_AdjR2 is relatively unbiased.
+
+Model performance statistics over the test set for Model_AdjR2 are shown below.
+
+### Table 3.3.1.4: Model AdjR2 Performance Metrics (Test Set)
+
+| Measure        | Value     | Measure  | Value      |
+|----------------|-----------|----------|------------|
+| MSE            | 609571820 | R-Square | 0.8690     |
+| MAE            | 17634.09  | Adj R-Sq | 0.8653     |
+| Root MSE       | 24690     | C(p)     | 16.0000    |
+| Dependent Mean | 183733    | AIC      | 10979.4800 |
+| Coeff Var      | 13.43772  | BIC      | 10982.4515 |
+
+From the table above, we can see that applying the same model specification to the test set of data shows a slight reduction in MSE, MAE and likewise, a reduction in reported R-Square and adjusted R-Square values. Although we can also see a reduction in AIC and BIC, these metrics are better suited to compare alternative model specifications which have been assessed against the test set of data. Generally, performance metrics for Model_AdjR2 have remained fairly consistent between the training and test sets, suggesting that the model is able to generalize over the test set of data.
+
+### 3.3.2 AVS: MaxR
+
+The maximum improvement technique does not settle on a single model. Instead, it tries to find the 'best' one-variable model, the 'best' two-variable model, and so forth [@Sasi2016]. This method defines 'best' as the model which produces the highest R-squared, and will cycle initially excluded variables into the model, determining if the R-squared value has improved for each n-variable model. For this technique, I chose to select the model specification which maximizes the number of included variables, so long as the coefficient estimation for each included variable has a significance level (p-value) of less than 10%. This technique is applied to the training set of data, with the resulting model (Model_MaxR) shown below.
+
+Parameter estimates for Model_MaxR are also shown below.
+
+### Table 3.3.2.1: Model MaxR Parameter Estimates (Training Set)
+
+| Variable          | DF | Parameter Estimate | Standard Error | t Value | $\text{Pr} > |t|$ | VIF     |
+|-------------------|----|--------------------|----------------|---------|-------------------|---------|
+| Intercept         | 1  | -11017             | 3593.32130     | -3.07   | 0.0022            | 0       |
+| BsmtUnfSF         | 1  | -31.60162          | 2.17824        | -14.51  | <.0001            | 1.39896 |
+| FirstFlrSF        | 1  | 81.71004           | 3.82078        | 21.39   | <.0001            | 3.12728 |
+| GarageArea        | 1  | 14.55286           | 6.42301        | 2.27    | 0.0236            | 2.20908 |
+| LotArea           | 1  | 0.60456            | 0.09959        | 6.07    | <.0001            | 1.14073 |
+| MasVnrArea        | 1  | 38.08671           | 5.16414        | 7.38    | <.0001            | 1.42634 |
+| OpenPorchSF       | 1  | 38.13958           | 15.10918       | 2.52    | 0.0117            | 1.17443 |
+| ScreenPorch       | 1  | 41.75456           | 13.37526       | 3.12    | 0.0018            | 1.07569 |
+| SecondFlrSF       | 1  | 63.24442           | 2.42605        | 26.07   | <.0001            | 1.61915 |
+| TotalBsmtSF       | 1  | 48.41311           | 3.49815        | 13.84   | <.0001            | 3.18135 |
+| WoodDeckSF        | 1  | 34.89783           | 6.70107        | 5.21    | <.0001            | 1.21302 |
+| YearBuilt7095_ind | 1  | 14413              | 2149.44843     | 6.71    | <.0001            | 1.52072 |
+| YearBuiltgt95_ind | 1  | 41018              | 2386.33208     | 17.19   | <.0001            | 1.84493 |
+| GarageCarsH_ind   | 1  | 30474              | 3352.65602     | 9.09    | <.0001            | 1.92361 |
+
+For Model_MaxR, all coefficient estimates have significant p-values at the 95% level, allowing us to reject the null hypothesis for each estimate and conclude that each have non-zero coefficients. We also note that the polarity of estimate for the majority of coefficients seems reasonable, however, 'BsmtUnfSF' has reported a negative coefficient estimate under this specification. It is reasonable to suggest that an increase in 'BsmtUnfSF', which represents basement area, should instead translate to an increase in sale price. We therefore interpret this coefficient estimate with caution. The greater concern however, is that we have noted a change in coefficient estimate polarity for two specifications which have been estimated over the same set of data. Finally, we note that the VIF for each predictor variable is less than five suggesting little to moderate correlation between predictors. 
+
+Goodness-of-fit information for Model_MaxR is shown below.
+
+### Table 3.3.2.2: Model MaxR Analysis of Variance (Training Set)
+
+| Source          | DF   | Sum of Squares | Mean Square | F Value | Pr > F |
+|-----------------|------|----------------|-------------|---------|--------|
+| Model           | 13   | 5.778124E12    | 4.444711E11 | 560.17  | <.0001 |
+| Error           | 1190 | 9.442093E11    | 793453231   |         |        |
+| Corrected Total | 1203 | 6.722334E12    |             |         |        |
+
+The model has reported a large F-value suggesting that the observations and regression differ from the grand mean. Likewise, the F-value has a highly significant p-value under the null hypothesis that there is no linear relationship between the predictor and response variable.
+
+Model performance statistics over the training set for Model_MaxR are shown below.
+
+### Table 3.3.2.3: Model MaxR Performance Metrics (Training Set)
+
+| Measure        | Value     | Measure  | Value      |
+|----------------|-----------|----------|------------|
+| MSE            | 793453231 | R-Square | 0.8575     |
+| MAE            | 19975.46  | Adj R-Sq | 0.8560     |
+| Root MSE       | 28168     | C(p)     | 14.0000    |
+| Dependent Mean | 186614    | AIC      | 24686.1718 |
+| Coeff Var      | 15.09444  | BIC      | 24688.5009 |
+
+The R-square value above suggests that Model_MaxR explains ~86% of the variability in sale price using each of the included predictor variables. The adjusted R-squared value for this specification is slightly lower (inferior) than the adjusted R-square reported for Model_AdjR2 (0.8605), and its AIC and BIC are slightly higher (inferior) than those reported for Model_AdjR2 (24684.1393 and 24686.5699 respectively). These metrics suggest that Model_MaxR may have a slightly worse fit over the training set of data compared to Model_AdjR2. Interestingly, there is a greater penalty for inclusion of parameters under the BIC, with AIC being biased towards high dimensional models and BIC biased to low dimensional models [@Kass1995]. And considering that Model_MaxR has two fewer predictor variables than Model_AdjR, it may have been reasonable to expect Model_MaxR to achieve a superior BIC score. Mallows' Cp on the other hand, is reported as 14 for this model, confirming that this model remains relatively unbiased.
+
+Model performance statistics over the test set for Model_MaxR are shown below.
+
+### Table 3.3.2.4: Model MaxR Performance Metrics (Test Set)
+
+| Measure        | Value      | Measure  | Value      |
+|----------------|------------|----------|------------|
+| MSE            | 609037261  | R-Square | 0.8686     |
+| MAE            | 17650.88   | Adj R-Sq | 0.8654     |
+| Root MSE       | 24679      | C(p)     | 14.0000    |
+| Dependent Mean | 183733     | AIC      | 10977.0614 |
+| Coeff Var      | 13.43183   | BIC      | 10979.8024 |
+
+Although Model_MaxR reported a slight reduction in adjusted R-square in comparison to Model_AdjR2 when assessed over the training set of data, these metrics are much more comparable over the test set of data. We also note that the AIC and BIC of Model_MaxR are in fact lower (superior) to Model_AdjR2 (10979.4800 and 10982.4505 respectively) over the test set of data. These metrics suggest that Model_MaxR may be able to generalize better than Model_AdjR outside of the training set of data.
+
+### 3.3.3 AVS: Mallow's Cp
+
+The Mallow's Cp selection technique is much like the adjusted R-squared method described above, however this method defines 'best' as the model which minimizes the Mallow's Cp statistic [@Mont2012]. This technique is applied to the training set of data, with the resulting model (Model_MCp) shown below.
+
+Parameter estimates for Model_MCp are also shown below.
+
+### Table 3.3.3.1: Model MCp Parameter Estimates (Training Set)
+
+| Variable          | DF   | Parameter Estimate | Standard Error | t Value | $\text{Pr} > |t|$ | VIF     |
+|-------------------|------|--------------------|----------------|---------|-------------------|---------|
+| Intercept         | 1    | 3213.23720         | 4042.56317     | 0.79    | 0.4269            | 0       |
+| BsmtFinSF1        | 1    | 49.71910           | 3.55593        | 13.98   | <.0001            | 3.48841 |
+| BsmtFinSF2        | 1    | 40.71360           | 5.23524        | 7.78    | <.0001            | 1.55478 |
+| BsmtUnfSF         | 1    | 16.90761           |3.47398         | 4.87    | <.0001            | 3.56701 | 
+| FirstFlrSF        | 1    | 81.55998           | 3.81689        | 21.37   | <.0001            | 3.12852 |
+| GarageArea        | 1    | 14.79628           | 6.41638        | 2.31    | 0.0213            | 2.20989 |
+| LotArea           | 1    | 0.61089            | 0.09952        | 6.14    | <.0001            | 1.14191 |
+| MasVnrArea        | 1    | 37.15000           | 5.17963        | 7.17    | <.0001            | 1.43840 |
+| OpenPorchSF       | 1    | 37.91604           | 15.09123       | 2.51    | 0.0121            | 1.17449 |
+| ScreenPorch       | 1    | 41.95853           | 13.35939       | 3.14    | 0.0017            | 1.07575 |
+| SecondFlrSF       | 1    | 63.39610           | 2.42432        | 26.15   | <.0001            | 1.62077 |
+| WoodDeckSF        | 1    | 36.06896           | 6.71914        | 5.37    | <.0001            | 1.22255 |
+| YearBuiltle70_ind | 1    | -14216             | 2149.15275     | -6.61   | <.0001            | 1.64300 |
+| YearBuiltgt95_ind | 1    | 25953              | 2266.51128     | 11.45   | <.0001            | 1.66837 |
+| GarageCarsH_ind   | 1    | 30616              | 3349.34814     | 9.14    | <.0001            | 1.92449 |
+
+For Model_MCp, all coefficient estimates have significant p-values at the 95% level, allowing us to reject the null hypothesis for each estimate and conclude that each have non-zero coefficients. For this specification, we note that a dummy variable for those properties built prior to 1970 ('YearBuiltle70_ind') has been included, while previous specifications included a dummy variable  for those properties built between 1970 and 1995 ('YearBuilt7095_ind'). For this specification, the coefficient estimate for 'YearBuiltle70_ind' is negative, suggesting that those properties built prior to 1970 tend to attract a lower sale price. The absolute difference compared to the coefficient estimate for 'YearBuiltgt95_ind' is respected, indicating that properties constructed since 1995 tend to attract higher sale prices. Finally, we note that both 'BsmtFinSF1' and 'FirstFlrSF' have reported a VIF value which is slightly greater than three. This suggests a moderate to high correlation between these predictor variables and the remaining variables within the model.
+
+Goodness-of-fit information for Model_Mcp is shown below.
+
+### Table 3.3.3.2: Model MCp Analysis of Variance (Training Set)
+
+| Source          | DF   | Sum of Squares | Mean Square | F Value | Pr > F |
+|-----------------|------|----------------|-------------|---------|--------|
+| Model           | 14   | 5.781211E12    | 4.129437E11 | 521.71  | <.0001 |
+| Error           | 1189 | 9.411224E11    | 791524277   |         |        |
+| Corrected Total | 1203 | 6.722334E12    |             |         |        |
+
+The model has reported a large F-value suggesting that the observations and regression differ from the grand mean. Likewise, the F-value has a highly significant p-value under the null hypothesis that there is no linear relationship between the predictor and response variable.
+
+Model performance statistics over the training set for Model_MCp are shown below.
+
+### Table 3.3.3.3: Model MCp Performance Metrics (Training Set)
+
+| Measure        | Value      | Measure  | Value      |
+|----------------|------------|----------|------------|
+| MSE            | 791524277  | R-Square | 0.8600     |
+| MAE            | 19932.62   | Adj R-Sq | 0.8584     |
+| Root MSE       | 28134      | C(p)     | 15.0000    |
+| Dependent Mean | 186614     | AIC      | 24684.2290 |
+| Coeff Var      | 15.07608   | BIC      | 24686.6071 |
+
+The R-square value above suggests that Model_MCp explains 86% of the variability in sale price using each of the included predictor variables. The adjusted R-square value for this model lies between the value reported for Model_AdjR2 (0.8605) and Model_MaxR (0.8560). The reported AIC and BIC for this model are comparable to Model_AdjR2 (24684.1393 and 24686.5699 respectively), and slightly lower than the AIC and BIC reported for Model_MaxR model (24686.1718 and 24688.5009) over the training set of data. Mallows' Cp is reported as 11 for this model, confirming that this model remains relatively unbiased.
+
+Model performance statistics over the training set for Model_MCp are shown below.
+
+### Table 3.3.3.4: Model MCp Performance Metrics (Test Set)
+
+| Measure        | Value     | Measure  | Value      |
+|----------------|-----------|----------|------------|
+| MSE            | 609079766 | R-Square | 0.8689     |
+| MAE            | 17653.01  | Adj R-Sq | 0.8654     |
+| Root MSE       | 24680     | C(p)     | 15.0000    |
+| Dependent Mean | 183733    | AIC      | 10978.0717 |
+| Coeff Var      | 13.43230  | BIC      | 10980.9240 |
+
+Performance metrics for Model_MCp remained fairly consistent between the training and test sets, suggesting that the model is able to generalize over the test set of data. Again, while Model_MCp was able to achieve a superior AIC and BIC compared to Model_MaxR over the training set of data, it has reported a higher (inferior) AIC and BIC to Model MaxR (10977.0614 and 10979.8024 respectively) over the test set of data.
+
+### 3.3.4 AVS: Forward Selection
+
+The forward selection technique begins with no variables in the model. Then for each independent variable, calculates an F statistic that reflects the variables' contribution to the model if it were included. Variables are added one by one to the model until no remaining variable produces a significant F statistic. At each step, the variable showing the greatest contribution to the model is added, with all added variables remaining in the model for future steps [@Sasi2016]. For this technique, I elected to use a SLENTRY value of 0.10, which indicates that variables should only be added to the specification if their coefficient estimation has a significance level (p-value) less than 10%. This technique is applied to the training set of data, with the resulting model (Model_F) shown below.
+
+Parameter estimates for Model_F are also shown below.
+
+### Table 3.3.4.1: Model F Parameter Estimates (Training Set)
+
+| Variable          | DF | Parameter Estimate | Standard Error | t Value | $\text{Pr} > |t|$ | VIF     |
+|-------------------|----|--------------------|----------------|---------|-------------------|---------|
+| Intercept         | 1  | -11165             | 3589.78476     | -3.11   | 0.0019            | 0       |
+| BsmtFinSF1        | 1  | 8.87016            | 4.55841        | 1.95    | 0.0519            | 5.73635 |
+| BsmtUnfSF         | 1  | -23.98059          | 4.50605        | -5.32   | <.0001            | 6.00524 |
+| FirstFlrSF        | 1  | 18.08716           | 3.86364        | 4.68    | <.0001            | 3.20776 |
+| GarageArea        | 1  | 14.45477           | 6.41601        | 2.25    | 0.0244            | 2.21111 |
+| GrLivArea         | 1  | 63.42130           | 2.42308        | 26.17   | <.0001            | 2.17736 |
+| LotArea           | 1  | 0.60931            | 0.09950        | 6.12    | <.0001            | 1.14210 |
+| MasVnrArea        | 1  | 37.30568           | 5.17613        | 7.21    | <.0001            | 1.43742 |
+| OpenPorchSF       | 1  | 38.22267           | 15.08316       | 2.53    | 0.0114            | 1.17402 |
+| ScreenPorch       | 1  | 42.28888           | 13.35344       | 3.17    | 0.0016            | 1.07551 |
+| TotalBsmtSF       | 1  | 41.04475           | 5.23491        | 7.84    | <.0001            | 7.14659 |
+| WoodDeckSF        | 1  | 35.76839           | 6.71844        | 5.32    | <.0001            | 1.22310 |
+| YearBuilt7095_ind | 1  | 14412              | 2147.18948     | 6.71    | <.0001            | 1.52223 |
+| YearBuiltgt95_ind | 1  | 40359              | 2419.70720     | 16.68   | <.0001            | 1.90279 |
+| GarageCarsH_ind   | 1  | 30661              | 3348.05560     | 9.16    | <.0001            | 1.92428 |
+
+For Model_F, all coefficient estimates have significant p-values at the 95% level, allowing us to reject the null hypothesis for each estimate and conclude that each have non-zero coefficients. We also note that the polarity of estimate for the majority of coefficients seems reasonable, however, as with Model_MaxR, 'BsmtUnfSF' has reported a negative coefficient estimate under this specification. Finally, we note that whilst the VIF for the majority of predictor variables is less than three, there are a number of notable exceptions with this specification. Both 'BsmtFinSF1', 'BsmtUnfSF' and 'TotalBsmtSF' have reported VIF values greater than five, which would suggest a high amount of correlation with other predictors.
+
+Goodness-of-fit information for Model_F is shown below.
+
+### Table 3.3.4.2: Model F Analysis of Variance (Training Set)
+
+| Source          | DF   | Sum of Squares | Mean Square | F Value | Pr > F |
+|-----------------|------|----------------|-------------|---------|--------|
+| Model           | 14   | 5.781837E12    | 4.129883E11 | 522.11  | <.0001 |
+| Error           | 1189 | 9.404969E11    | 790998251   |         |        |
+| Corrected Total | 1203 | 6.722334E12    |             |         |        |
+
+The model reports a large F-value suggesting that the observations and regression differ from the grand mean. Likewise, the F-value has a highly significant p-value under the null hypothesis that there is no linear relationship between the predictor and response variable.
+
+Model performance statistics over the training set for Model_F are shown below.
+
+### Table 3.3.4.3: Model F Performance Metrics (Training Set)
+
+| Measure        | Value     | Measure  | Value      |
+|----------------|-----------|----------|------------|
+| MSE            | 790998251 | R-Square | 0.8601     |
+| MAE            | 19923.84  | Adj R-Sq | 0.8584     |
+| Root MSE       | 28125     | C(p)     | 15.0000    |
+| Dependent Mean | 186614    | AIC      | 24683.4286 |
+| Coeff Var      | 15.07107  | BIC      | 24685.8067 |
+
+The R-square value above suggests that Model_F explains ~86% of the variability in sale price using each of the included predictor variables. The adjusted R-square value for this model lies between the value reported for Model_AdjR2 (0.8605) and Model_MaxR (0.8560). Both the reported AIC and BIC for this model is lower than each of the previously discussed model specifications. Mallows' Cp is reported as 15 for this model, confirming that this model remains relatively unbiased.
+
+Model performance statistics over the training set for Model_F are shown below.
+
+### Table 3.3.4.4: Model F Performance Metrics (Test Set)
+
+| Measure        | Value     | Measure  | Value      |
+|----------------|-----------|----------|------------|
+| MSE            | 608574841 | R-Square | 0.8690     |
+| MAE            | 17645.18  | Adj R-Sq | 0.8655     |
+| Root MSE       | 24669     | C(p)     | 15.0000    |
+| Dependent Mean | 183733    | AIC      | 10977.6222 |
+| Coeff Var      | 13.42673  | BIC      | 10980.4745 |
+
+Performance metrics for Model_MCp have remained fairly consistent between the training and test sets. This suggests that the model is able to generalize over the test set of data.
+
+### 3.3.5 AVS: Backward Elimination
+
+The backward elimination technique begins by calculating F statistics for a model which includes all of the independent variables [@Mont2012]. Variables are then removed from the model one by one until all variables remaining in the model produce a significant F statistic. At each step, the variable showing the smallest contribution to the model is removed, with all removed variables remaining out of the model for future steps [@Sasi2016]. For this technique, I elected to use a SLSTAY value of 0.10, which indicates that variables should not be removed from the specification if their coefficient estimation has a significance level (p-value) less than 10%. This technique is applied to the training set of data, with the resulting model (Model_B) shown below.
+
+Parameter estimates for Model_B are also shown below.
+
+### Table 3.3.5.1: Model B Parameter Estimates (Training Set)
+
+| Variable          | DF   | Parameter Estimate | Standard Error | t Value | $\text{Pr} > |t|$ | VIF     |
+|-------------------|------|--------------------|----------------|---------|-------------------|---------|
+| Intercept         | 1    | 3213.23720         | 4042.56317     | 0.79    | 0.4269            | 0       |
+| BsmtFinSF1        | 1    | 49.71910           | 3.55593        | 13.98   | <.0001            | 3.48841 |
+| BsmtFinSF2        | 1    | 40.71360           | 5.23524        | 7.78    | <.0001            | 1.55478 |
+| BsmtUnfSF         | 1    | 16.90761           |3.47398         | 4.87    | <.0001            | 3.56701 | 
+| FirstFlrSF        | 1    | 81.55998           | 3.81689        | 21.37   | <.0001            | 3.12852 |
+| GarageArea        | 1    | 14.79628           | 6.41638        | 2.31    | 0.0213            | 2.20989 |
+| LotArea           | 1    | 0.61089            | 0.09952        | 6.14    | <.0001            | 1.14191 |
+| MasVnrArea        | 1    | 37.15000           | 5.17963        | 7.17    | <.0001            | 1.43840 |
+| OpenPorchSF       | 1    | 37.91604           | 15.09123       | 2.51    | 0.0121            | 1.17449 |
+| ScreenPorch       | 1    | 41.95853           | 13.35939       | 3.14    | 0.0017            | 1.07575 |
+| SecondFlrSF       | 1    | 63.39610           | 2.42432        | 26.15   | <.0001            | 1.62077 |
+| WoodDeckSF        | 1    | 36.06896           | 6.71914        | 5.37    | <.0001            | 1.22255 |
+| YearBuiltle70_ind | 1    | -14216             | 2149.15275     | -6.61   | <.0001            | 1.64300 |
+| YearBuiltgt95_ind | 1    | 25953              | 2266.51128     | 11.45   | <.0001            | 1.66837 |
+| GarageCarsH_ind   | 1    | 30616              | 3349.34814     | 9.14    | <.0001            | 1.92449 |
+
+We can see that the backward stepwise selection technique results in the same model specification as reported by the Mallows' Cp technique used to produce Model_Mcp. As such, discussion of goodness-of-fit and performance statistics for Model_B have been omitted from this assessment.
+
+### 3.3.6 AVS: Stepwise Selection
+
+The stepwise technique is a modification of the forward-selection technique. It differs in that variables already in the model do not necessarily remain in the model [@Mont2012]. For this technique, I elected to use a SLENTRY value of 0.10, which indicates that variables should only be added to the specification if they have a significance level (p-value) of less than 10%, and also elected to use a SLSTAY value of 0.10, which indicates that variables should not be removed from the specification if they have a significance level (p-value) less than 10%. This technique is applied to the training set of data, with the resulting model (Model_S) shown below.
+
+Parameter estimates for Model_S are shown below.
+
+### Table 3.3.6.1: Model S Parameter Estimates (Training Set)
+
+| Variable          | DF | Parameter Estimate | Standard Error | t Value | $\text{Pr} > |t|$ | VIF     |
+|-------------------|----|--------------------|----------------|---------|-------------------|---------|
+| Intercept         | 1  | -11165             | 3589.78476     | -3.11   | 0.0019            | 0       |
+| BsmtFinSF1        | 1  | 8.87016            | 4.55841        | 1.95    | 0.0519            | 5.73635 |
+| BsmtUnfSF         | 1  | -23.98059          | 4.50605        | -5.32   | <.0001            | 6.00524 |
+| FirstFlrSF        | 1  | 18.08716           | 3.86364        | 4.68    | <.0001            | 3.20776 |
+| GarageArea        | 1  | 14.45477           | 6.41601        | 2.25    | 0.0244            | 2.21111 |
+| GrLivArea         | 1  | 63.42130           | 2.42308        | 26.17   | <.0001            | 2.17736 |
+| LotArea           | 1  | 0.60931            | 0.09950        | 6.12    | <.0001            | 1.14210 |
+| MasVnrArea        | 1  | 37.30568           | 5.17613        | 7.21    | <.0001            | 1.43742 |
+| OpenPorchSF       | 1  | 38.22267           | 15.08316       | 2.53    | 0.0114            | 1.17402 |
+| ScreenPorch       | 1  | 42.28888           | 13.35344       | 3.17    | 0.0016            | 1.07551 |
+| TotalBsmtSF       | 1  | 41.04475           | 5.23491        | 7.84    | <.0001            | 7.14659 |
+| WoodDeckSF        | 1  | 35.76839           | 6.71844        | 5.32    | <.0001            | 1.22310 |
+| YearBuilt7095_ind | 1  | 14412              | 2147.18948     | 6.71    | <.0001            | 1.52223 |
+| YearBuiltgt95_ind | 1  | 40359              | 2419.70720     | 16.68   | <.0001            | 1.90279 |
+| GarageCarsH_ind   | 1  | 30661              | 3348.05560     | 9.16    | <.0001            | 1.92428 |
+
+We can see that the forward stepwise selection technique results in the same model specification as reported by the forward selection technique used to produce Model_F. As such, discussion of goodness-of-fit information and performance statistics for Model_S have been omitted from this assessment.
+
+### 3.3.7 AVS: Selected Model Summary
+
+The adjusted R-square selection technique results in a specification with the highest adjusted R-square score (Model_AdjR2). This specification includes 16 predictor variables, only one of which is not significantly different from zero at the 95% confidence level. By maximizing adjusted R-square, this selection technique avoids including too many insignificant coefficient estimates. For the maximum R selection technique however, I chose to select the specification which maximizes R-square while including only those variables which had a significance level (p-value) of less than 10% (Model_MaxR). Doing so results in a specification which includes 14 predictor variables, with a lower adjusted R-square and higher AIC/BIC than the specification found by the adjusted R-square selection technique.
+
+Both the Mallows' Cp and backward selection techniques result in the same model specification (Model_Mcp and Model_B). This specification includes 15 predictor variables, all of which are significantly different from zero at the 95% confidence level. Based on an evaluation of model performance against the training set, models with this specification achieve a slightly lower (inferior) adjusted R-square score compared to Model_AdjR2, but a lower (superior) AIC and BIC score compared to Model_MaxR.
+
+The forward and stepwise selection techniques also result in the same model specification (Model_F and Model_S). This specification also includes 15 predictor variables, all of which are found to be significantly different from zero. Based on an evaluation of model performance against the training set, models with this specification also achieve a slightly lower (inferior) adjusted R-square score compared to Model_AdjR2, but have the lowest (superior) AIC and BIC scores compared to all other models. Of greatest concern for this specification however, is the number of predictor variables reported a VIF greater than five. This suggests that this specification may suffer from a greater degree of multicollinearity than others, and its results should be interpreted with caution.
+
+A summary of performance metrics over each model using the training set of data is shown below.
+
+### Table 3.3.7.1: Model Performance Metric Summary (Training Set)
+
+| Model       | Pred. | MSE       | MAE      | R-Square | Adj R-Square | C(p)    | AIC        | BIC        |
+|-------------|-------|-----------|----------|----------|--------------|---------|------------|------------|
+| Model_AdjR2 | 16    | 790816773 | 19919.13 | 0.8622   | 0.8605       | 16.0000 | 24684.1393 | 24686.5699 |
+| Model_MaxR  | 14    | 793453231 | 19975.46 | 0.8575   | 0.8560       | 14.0000 | 24686.1718 | 24688.5009 |
+| Model_MCp^  | 15    | 791524277 | 19932.62 | 0.8600   | 0.8584       | 15.0000 | 24684.2290 | 24686.6071 |
+| Model_F*    | 15    | 790998251 | 19923.84 | 0.8601   | 0.8584       | 15.0000 | 24683.4286 | 24685.8067 |
+| Model_B^    | 15    | 791524277 | 19932.62 | 0.8600   | 0.8584       | 15.0000 | 24684.2290 | 24686.6071 |
+| Model_S*    | 15    | 790998251 | 19923.84 | 0.8601   | 0.8584       | 15.0000 | 24683.4286 | 24685.8067 |
+
+In general, the relative performance of each model is maintained over the test set of data. It is worth noting however, that the R-Square and adjusted R-Square performance of Model_AdjR2 seems to have fallen by a greater amount between the training and test sets of data relative to each of the other models. And the AIC and BIC of Model_AdjR2 seems to have not fallen as much between the training and test sets of data relative to other models. This suggests that Model_AdjR2 may not generalize as well as other models.
+
+Ultimately, performance metrics over the test set of data suggest that Model_MaxR may be the superior model for predicting property prices. This model achieves a similar adjusted R-square metric to other models over the test set of data, yet achieves the lowest AIC and BIC score. And although this specification includes a coefficient estimate with questionable polarity ('BsmtUnfSF'), it retains only significant variables with relatively low VIF values.
+
+A summary of performance metrics over each model using the test set of data is shown below.
+
+### Table 3.3.7.2: Model Performance Metric Summary (Test Set)
+
+| Model        | Pred. | MSE       | MAE      | R-Square | Adj R-Square | C(p)    | AIC        | BIC        |
+|--------------|-------|-----------|----------|----------|--------------|---------|------------|------------|
+| Model_AdjR2  | 16    | 609571820 | 17634.09 | 0.8690   | 0.8653       | 16.0000 | 10979.4800 | 10982.4515 |
+| Model_MaxR   | 14    | 609037261 | 17650.88 | 0.8686   | 0.8654       | 14.0000 | 10977.0614 | 10979.8024 |
+| Model_MCp^   | 15    | 609079766 | 17653.01 | 0.8689   | 0.8654       | 15.0000 | 10978.0717 | 10980.9240 |
+| Model_F*     | 15    | 608574841 | 17645.18 | 0.8690   | 0.8655       | 15.0000 | 10977.6222 | 10980.4745 |
+| Model_B^     | 15    | 609079766 | 17653.01 | 0.8689   | 0.8654       | 15.0000 | 10978.0717 | 10980.9240 |
+| Model_S*     | 15    | 608574841 | 17645.18 | 0.8690   | 0.8655       | 15.0000 | 10977.6222 | 10980.4745 |
+
+## 3.4 Operational Validation
+
+We can make an operational validation of each of the four unique model specifications found using the automated variable selection methods described above. To do this, we assess the 'prediction grade' of each model by determining the number of predicted values which lie within certain ranges of the actual values. Prediction grades are labelled, 'Grade 1', 'Grade 2' and 'Grade 3' and are representations of the number of predicted values which lie within 10% of the actual value, 10-15% of the actual value, or greater than 15% of the actual value respectively. The SAS procedure to generate the operational validation statistics is shown in Appendix A.
+
+The table below shows a summary of the performance over the training set.
+
+### Table 3.4.1: Operational Validation Summary (Training Set)
+
+| Model       | Grade 1 | Grade 2 | Grade 3 |
+|-------------|---------|---------|---------|
+| Model_AdjR2 | 56.40%  | 17.42%  | 26.18%  |
+| Model_MaxR  | 56.23%  | 16.93%  | 26.84%  |
+| Model_MCp^  | 56.56%  | 17.34%  | 26.09%  |
+| Model_F*    | 56.56%  | 17.26%  | 26.18%  |
+| Model_B^    | 56.56%  | 17.34%  | 26.09%  |
+| Model_S*    | 56.56%  | 17.26%  | 26.18%  |
+
+We note quite similar performance over each grade for the training set of data. The amount of Grade 1 predictions for each specification is particularly consistent. At a high level, the results above indicate that the specification for Model_MaxR appears to be the worst performer over the training set of data, whilst the specification for Model_Mcp and Model_B appear to perform best.
+
+The table below shows a summary of the performance over the test set.
+
+### Table 3.4.2: Operational Validation Summary (Test Set)
+
+| Model       | Grade 1 | Grade 2 | Grade 3 |
+|-------------|---------|---------|---------|
+| Model_AdjR2 | 61.21%  | 16.73%  | 22.06%  |
+| Model_MaxR  | 61.10%  | 16.76%  | 22.14%  |
+| Model_MCp^  | 61.21%  | 16.73%  | 22.06%  |
+| Model_F*    | 61.40%  | 16.73%  | 21.88%  |
+| Model_B^    | 61.21%  | 16.73%  | 22.06%  |
+| Model_S*    | 61.40%  | 16.73%  | 21.88%  |
+
+Again, we note quite similar performance over each grade for the test set of data. The specification for Model_MaxR shows slightly worse performance, while the specification for Model_F and Model_S appears to perform best. 
+
+Performance metrics such as the above are able to aid in assessing model performance from a 'practical' point of view. The ability or inability of models to accurately predict values is likely to be of key interest for the end-user. However, the operation validations shown above have done little to help differentiate each of the automated variable specifications fitted as part of this assessment.
+
+# 4 Conclusion
+
+Each automated selection technique used as part of this assessment has its own definition of a 'best' model specification. However, we noted only minor variation over each of the final model specifications, and in the case of the Mallows' Cp and backwards elimination, or in the case of the forward selection and stepwise selection methods, we even noted the same final specification. An assessment of model performance based on operational validation also did little to differentiate specifications, with each showing similar prediction accuracy. Ultimately, this assessment concluded Model_MaxR to be the superior model for predicting property prices, due to its superior AIC and BIC scores, and since it retains only significant variables with relatively low VIF values.
+
+It is important to note that no single statistical method can be relied on to identify the 'true' or 'best' model. Effective model building requires substantive theory to suggest relevant predictors and plausible functional forms for the model. While such 'manually specified' models may fail to provide superior in-sample performance they are likely to exhibit superior out-of-sample performance, particular over forecasted periods where previously observed empirical relationships give way to true underlying fundamental relationships.
+
+I don't doubt however, that additional value could be gained from repeating the process outlined as part of this assessment whilst including a greater number of potential predictor variables or a greater pool of observations. There were for example, a variety of discrete variables which were left unobserved by this assessment. Including these variables may have resulted in greater variation over fitted specifications.
+
+\newpage
+
+# Appendix A SAS Procedure
+
+## SAS Procedure A1: Load the Dataset
+
+~~~{.fortran}
+libname mydata '/scs/crb519/PREDICT_410/SAS_Data/' access=readonly;
+
+DATA ames;
+	SET mydata.ames_housing_data;
+RUN; QUIT;
+
+PROC PRINT DATA=ames (obs=10);
+RUN; QUIT;
+
+PROC CONTENTS DATA=ames ORDER=VARNUM OUT=ames_cont;
+RUN; QUIT;
+~~~
+
+
+## SAS Procedure A2: Data Waterfall
+
+~~~{.fortran}
+PROC MEANS DATA=ames MIN MAX MEAN STDDEV NMISS N;
+RUN; QUIT;
+
+DATA ames_smpl;
+	SET ames;
+	FORMAT drop_condition $30.;
+	* Functional (Ordinal): Home functionality (Assume typical unless deductions are warranted);
+	IF ((Functional ne 'Typ') AND (Functional ne 'Min1') AND (Functional ne 'Min2'))
+		THEN drop_condition='01: Non-typical Function';
+	* MS Zoning (Nominal): Identifies the general zoning classification of the sale.;
+	ELSE IF ((Zoning ne 'RH') AND (Zoning ne 'RL') AND (Zoning ne 'RP') AND (Zoning ne 'RM')) 
+		THEN drop_condition='02: Non-typical Residential Zoning';
+	ELSE IF (YearBuilt < 1941)
+	  THEN drop_condition='03: Built 1940 & Older';
+	* Sale Condition (Nominal): Condition of sale;
+	ELSE IF (SaleCondition ne 'Normal') 
+		THEN drop_condition='04: Non-typical Sale';
+	ELSE drop_condition='05: Sample Population';
+RUN; QUIT;
+
+PROC FREQ DATA=ames_smpl;
+	TABLES drop_condition;
+RUN; QUIT;
+
+DATA ames_smpl;
+	SET ames_smpl;
+	IF (drop_condition ne '05: Sample Population') THEN DELETE;
+RUN; QUIT;
+
+PROC MEANS DATA=ames_smpl MIN MAX MEAN STDDEV NMISS N;
+RUN; QUIT;
+~~~
+
+
+## SAS Procedure A3: Create Indicator Variables
+
+~~~{.fortran}
+DATA ames_smpl;
+	SET ames_smpl;
+	IF (YearBuilt <= 1970) 
+		THEN YearBuiltle70_ind = 1; 
+		ELSE YearBuiltle70_ind = 0;
+	IF ((YearBuilt > 1970) AND (YearBuilt <= 1995))
+		THEN YearBuilt7095_ind = 1; 
+		ELSE YearBuilt7095_ind = 0;
+	IF (YearBuilt > 1995)
+		THEN YearBuiltgt95_ind = 1; 
+		ELSE YearBuiltgt95_ind = 0;
+	IF (BedroomAbvGr > 3) 
+		THEN BedroomAbvGrH_ind = 1; 
+		ELSE BedroomAbvGrH_ind = 0;
+	IF (BedroomAbvGr = 3) 
+		THEN BedroomAbvGrM_ind = 1; 
+		ELSE BedroomAbvGrM_ind = 0;
+	IF (BedroomAbvGr < 3) 
+		THEN BedroomAbvGrL_ind = 1; 
+		ELSE BedroomAbvGrL_ind = 0;
+	IF (FullBath >= 2) 
+		THEN FullBathH_ind = 1; 
+		ELSE FullBathH_ind = 0;
+	IF (FullBath < 2) 
+		THEN FullBathL_ind = 1; 
+		ELSE FullBathL_ind = 0;
+	IF (GarageCars > 2) 
+		THEN GarageCarsH_ind = 1; 
+		ELSE GarageCarsH_ind = 0;
+	IF (GarageCars = 2) 
+		THEN GarageCarsM_ind = 1; 
+		ELSE GarageCarsM_ind = 0;
+	IF (GarageCars < 2) 
+		THEN GarageCarsL_ind = 1; 
+		ELSE GarageCarsL_ind = 0;
+RUN; QUIT;
+
+PROC MEANS DATA=ames_smpl MIN MAX MEAN STDDEV NMISS N;
+RUN; QUIT;
+~~~
+
+
+## SAS Procedure A4: Create Train/Test Split
+
+~~~{.fortran}
+data ames_smpl_split;
+	SET ames_smpl;
+	U = UNIFORM(123);
+	IF (U < 0.70) 
+		THEN train = 1;
+		ELSE train = 0;
+	IF (U > 0.70) THEN test = 1;
+		ELSE test = 0;
+	IF (train = 1) THEN train_response = SalePrice;
+		ELSE train_response = .;
+	IF (test = 1) THEN test_response = SalePrice;
+		ELSE test_response = .;
+RUN; QUIT;
+
+PROC FREQ DATA = ames_smpl_split;
+	TABLES train test;
+RUN; QUIT;
+
+PROC CONTENTS DATA = ames_smpl_split;
+RUN; QUIT;
+~~~
+
+
+## SAS Procedure A5: AVS Selection and Evaluation
+
+~~~{.fortran}
+* Adjusted R-square;
+
+PROC REG DATA = ames_smpl_split OUTEST = reg_adjr2_out;
+	MODEL train_response = 
+	BsmtFinSF1 BsmtFinSF2 BsmtUnfSF EnclosedPorch FirstFlrSF GarageArea GrLivArea LotArea
+  	LowQualFinSF MasVnrArea MiscVal OpenPorchSF PoolArea ScreenPorch SecondFlrSF ThreeSsnPorch 
+  	TotalBsmtSF WoodDeckSF YearBuiltle70_ind YearBuilt7095_ind YearBuiltgt95_ind 
+  	BedroomAbvGrH_ind BedroomAbvGrM_ind BedroomAbvGrL_ind FullBathH_ind FullBathL_ind
+  	GarageCarsH_ind GarageCarsM_ind GarageCarsL_ind
+	/ SELECTION = adjrsq BEST = 5;
+RUN; QUIT;
+
+PROC PRINT DATA = reg_adjr2_out;
+
+PROC REG DATA = ames_smpl_split;
+	MODEL train_response = 
+	BsmtFinSF1 BsmtFinSF2 BsmtUnfSF EnclosedPorch FirstFlrSF GarageArea LotArea MasVnrArea 
+	OpenPorchSF ScreenPorch SecondFlrSF WoodDeckSF YearBuilt7095_ind YearBuiltgt95_ind 
+	GarageCarsH_ind
+	/ SELECTION = ADJRSQ START = 15 STOP = 15 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = adjr2_train PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA adjr2_train_res;
+	SET adjr2_train;
+	res = (yhat - train_response);
+	WHERE res IS NOT MISSING;
+	mae = abs(res);
+	mse = abs(res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = adjr2_train_res;
+	VAR mae mse;
+
+DATA adjr2_train_perf;
+	SET adjr2_train;
+	FORMAT prediction_grade $7.;
+	pred = ABS((yhat - train_response) / train_response);
+	IF train_response = . 
+		THEN DELETE;
+	ELSE IF pred <= 0.10
+		THEN prediction_grade = 'Grade 1';
+	ELSE IF pred > 0.10 AND pred <= 0.15
+		THEN prediction_grade = 'Grade 2';
+	ELSE IF pred > 0.15
+		THEN prediction_grade = 'Grade 3';
+
+PROC FREQ DATA = adjr2_train_perf;
+	TABLES prediction_grade;
+
+PROC REG DATA = ames_smpl_split;
+	MODEL test_response = 
+	BsmtFinSF1 BsmtFinSF2 BsmtUnfSF EnclosedPorch FirstFlrSF GarageArea LotArea MasVnrArea 
+	OpenPorchSF ScreenPorch SecondFlrSF WoodDeckSF YearBuilt7095_ind YearBuiltgt95_ind 
+	GarageCarsH_ind
+	/ SELECTION = ADJRSQ START = 15 STOP = 15 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = adjr2_test PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA adjr2_test_res;
+	SET adjr2_test;
+	res = (yhat - test_response);
+	WHERE res IS NOT MISSING;
+	mae = abs(res);
+	mse = abs(res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = adjr2_test_res;
+	VAR mae mse;
+
+DATA adjr2_test_perf;
+	SET adjr2_test;
+	FORMAT prediction_grade $7.;
+	pred = ABS((yhat - test_response) / test_response);
+	IF test_response = . 
+		THEN DELETE;
+	ELSE IF pred <= 0.10
+		THEN prediction_grade = 'Grade 1';
+	ELSE IF pred > 0.10 AND pred <= 0.15
+		THEN prediction_grade = 'Grade 2';
+	ELSE IF pred > 0.15
+		THEN prediction_grade = 'Grade 3';
+
+PROC FREQ DATA = adjr2_test_perf;
+	TABLES prediction_grade;
+
+
+
+* MaxR;
+
+PROC REG DATA = ames_smpl_split OUTEST = reg_maxr_out;
+	MODEL train_response = 
+	BsmtFinSF1 BsmtFinSF2 BsmtUnfSF EnclosedPorch FirstFlrSF GarageArea GrLivArea LotArea
+  	LowQualFinSF MasVnrArea MiscVal OpenPorchSF PoolArea ScreenPorch SecondFlrSF ThreeSsnPorch 
+  	TotalBsmtSF WoodDeckSF YearBuiltle70_ind YearBuilt7095_ind YearBuiltgt95_ind 
+  	BedroomAbvGrH_ind BedroomAbvGrM_ind BedroomAbvGrL_ind FullBathH_ind FullBathL_ind
+  	GarageCarsH_ind GarageCarsM_ind GarageCarsL_ind
+	/ SELECTION = maxr;
+RUN; QUIT;
+
+PROC PRINT DATA = reg_maxr_out;
+
+PROC REG DATA = ames_smpl_split;
+	MODEL train_response = 
+	BsmtUnfSF FirstFlrSF GarageArea LotArea MasVnrArea OpenPorchSF ScreenPorch SecondFlrSF 
+	TotalBsmtSF WoodDeckSF YearBuilt7095_ind YearBuiltgt95_ind GarageCarsH_ind 
+	/ SELECTION = ADJRSQ START = 13 STOP = 13 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = maxr_train PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA maxr_train_res;
+	SET maxr_train;
+	res = (yhat - train_response);
+	WHERE res IS NOT MISSING;
+	mae = abs(res);
+	mse = abs(res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = maxr_train_res;
+	VAR mae mse;
+
+DATA maxr_train_perf;
+	SET maxr_train;
+	FORMAT prediction_grade $7.;
+	pred = ABS((yhat - train_response) / train_response);
+	IF train_response = . 
+		THEN DELETE;
+	ELSE IF pred <= 0.10
+		THEN prediction_grade = 'Grade 1';
+	ELSE IF pred > 0.10 AND pred <= 0.15
+		THEN prediction_grade = 'Grade 2';
+	ELSE IF pred > 0.15
+		THEN prediction_grade = 'Grade 3';
+
+PROC FREQ DATA = maxr_train_perf;
+	TABLES prediction_grade;
+
+PROC REG DATA = ames_smpl_split;
+	MODEL test_response = 
+	BsmtUnfSF FirstFlrSF GarageArea LotArea MasVnrArea OpenPorchSF ScreenPorch SecondFlrSF 
+	TotalBsmtSF WoodDeckSF YearBuilt7095_ind YearBuiltgt95_ind GarageCarsH_ind
+	/ SELECTION = ADJRSQ START = 13 STOP = 13 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = maxr_test PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA maxr_test_res;
+	SET maxr_test;
+	res = (yhat - test_response);
+	WHERE res IS NOT MISSING;
+	mae = abs(res);
+	mse = abs(res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = maxr_test_res;
+	VAR mae mse;
+
+DATA maxr_test_perf;
+	SET maxr_test;
+	FORMAT prediction_grade $7.;
+	pred = ABS((yhat - test_response) / test_response);
+	IF test_response = . 
+		THEN DELETE;
+	ELSE IF pred <= 0.10
+		THEN prediction_grade = 'Grade 1';
+	ELSE IF pred > 0.10 AND pred <= 0.15
+		THEN prediction_grade = 'Grade 2';
+	ELSE IF pred > 0.15
+		THEN prediction_grade = 'Grade 3';
+
+PROC FREQ DATA = maxr_test_perf;
+	TABLES prediction_grade;
+
+
+
+* Mallow's Cp;
+
+PROC REG DATA = ames_smpl_split OUTEST = reg_cp_out;
+	MODEL train_response = 
+	BsmtFinSF1 BsmtFinSF2 BsmtUnfSF EnclosedPorch FirstFlrSF GarageArea GrLivArea LotArea
+  	LowQualFinSF MasVnrArea MiscVal OpenPorchSF PoolArea ScreenPorch SecondFlrSF ThreeSsnPorch 
+  	TotalBsmtSF WoodDeckSF YearBuiltle70_ind YearBuilt7095_ind YearBuiltgt95_ind 
+  	BedroomAbvGrH_ind BedroomAbvGrM_ind BedroomAbvGrL_ind FullBathH_ind FullBathL_ind
+  	GarageCarsH_ind GarageCarsM_ind GarageCarsL_ind
+	/ SELECTION = CP BEST = 5;
+RUN; QUIT;
+
+PROC PRINT DATA = reg_cp_out;
+
+PROC REG DATA = ames_smpl_split;
+	MODEL train_response = 
+	BsmtFinSF1 BsmtFinSF2 BsmtUnfSF FirstFlrSF GarageArea LotArea MasVnrArea OpenPorchSF 
+	ScreenPorch SecondFlrSF WoodDeckSF YearBuiltle70_ind YearBuiltgt95_ind GarageCarsH_ind
+	/ SELECTION = ADJRSQ START = 14 STOP = 14 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = cp_train PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA cp_train_res;
+	SET cp_train;
+	res = (yhat - train_response);
+	WHERE res IS NOT MISSING;
+	mae = abs(res);
+	mse = abs(res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = cp_train_res;
+	VAR mae mse;
+
+DATA cp_train_perf;
+	SET cp_train;
+	FORMAT prediction_grade $7.;
+	pred = ABS((yhat - train_response) / train_response);
+	IF train_response = . 
+		THEN DELETE;
+	ELSE IF pred <= 0.10
+		THEN prediction_grade = 'Grade 1';
+	ELSE IF pred > 0.10 AND pred <= 0.15
+		THEN prediction_grade = 'Grade 2';
+	ELSE IF pred > 0.15
+		THEN prediction_grade = 'Grade 3';
+
+PROC FREQ DATA = cp_train_perf;
+	TABLES prediction_grade;
+
+PROC REG DATA = ames_smpl_split;
+	MODEL test_response = 
+	BsmtFinSF1 BsmtFinSF2 BsmtUnfSF FirstFlrSF GarageArea LotArea MasVnrArea OpenPorchSF 
+	ScreenPorch SecondFlrSF WoodDeckSF YearBuiltle70_ind YearBuiltgt95_ind GarageCarsH_ind
+	/ SELECTION = ADJRSQ START = 14 STOP = 14 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = cp_test PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA cp_test_res;
+	SET cp_test;
+	res = (yhat - test_response);
+	WHERE res IS NOT MISSING;
+	mae = abs(res);
+	mse = abs(res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = cp_test_res;
+	VAR mae mse;
+
+DATA cp_test_perf;
+	SET cp_test;
+	FORMAT prediction_grade $7.;
+	pred = ABS((yhat - test_response) / test_response);
+	IF test_response = . 
+		THEN DELETE;
+	ELSE IF pred <= 0.10
+		THEN prediction_grade = 'Grade 1';
+	ELSE IF pred > 0.10 AND pred <= 0.15
+		THEN prediction_grade = 'Grade 2';
+	ELSE IF pred > 0.15
+		THEN prediction_grade = 'Grade 3';
+
+PROC FREQ DATA = cp_test_perf;
+	TABLES prediction_grade;
+
+
+
+* Forward;
+
+PROC REG DATA = ames_smpl_split OUTEST = reg_forward_out;
+	MODEL train_response = 
+	BsmtFinSF1 BsmtFinSF2 BsmtUnfSF EnclosedPorch FirstFlrSF GarageArea GrLivArea LotArea
+  	LowQualFinSF MasVnrArea MiscVal OpenPorchSF PoolArea ScreenPorch SecondFlrSF ThreeSsnPorch 
+  	TotalBsmtSF WoodDeckSF YearBuiltle70_ind YearBuilt7095_ind YearBuiltgt95_ind 
+  	BedroomAbvGrH_ind BedroomAbvGrM_ind BedroomAbvGrL_ind FullBathH_ind FullBathL_ind
+  	GarageCarsH_ind GarageCarsM_ind GarageCarsL_ind
+	/ SELECTION = forward SLENTRY = 0.10;
+RUN; QUIT;
+
+PROC PRINT DATA = reg_forward_out;
+
+PROC REG DATA = ames_smpl_split;
+	MODEL train_response = 
+	BsmtFinSF1 BsmtUnfSF FirstFlrSF GarageArea GrLivArea LotArea MasVnrArea OpenPorchSF 
+	ScreenPorch TotalBsmtSF WoodDeckSF YearBuilt7095_ind YearBuiltgt95_ind GarageCarsH_ind
+	/ SELECTION = ADJRSQ START = 14 STOP = 14 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = forward_train PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA forward_train_res;
+	SET forward_train;
+	res = (yhat - train_response);
+	WHERE res IS NOT MISSING;
+	mae = abs(res);
+	mse = abs(res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = forward_train_res;
+	VAR mae mse;
+
+DATA forward_train_perf;
+	SET forward_train;
+	FORMAT prediction_grade $7.;
+	pred = ABS((yhat - train_response) / train_response);
+	IF train_response = . 
+		THEN DELETE;
+	ELSE IF pred <= 0.10
+		THEN prediction_grade = 'Grade 1';
+	ELSE IF pred > 0.10 AND pred <= 0.15
+		THEN prediction_grade = 'Grade 2';
+	ELSE IF pred > 0.15
+		THEN prediction_grade = 'Grade 3';
+
+PROC FREQ DATA = forward_train_perf;
+	TABLES prediction_grade;
+
+PROC REG DATA = ames_smpl_split;
+	MODEL test_response = 
+	BsmtFinSF1 BsmtUnfSF FirstFlrSF GarageArea GrLivArea LotArea MasVnrArea OpenPorchSF 
+	ScreenPorch TotalBsmtSF WoodDeckSF YearBuilt7095_ind YearBuiltgt95_ind GarageCarsH_ind
+	/ SELECTION = ADJRSQ START = 14 STOP = 14 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = forward_test PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA forward_test_res;
+	SET forward_test;
+	res = (yhat - test_response);
+	WHERE res IS NOT MISSING;
+	mae = abs(res);
+	mse = abs(res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = forward_test_res;
+	VAR mae mse;
+
+DATA forward_test_perf;
+	SET forward_test;
+	FORMAT prediction_grade $7.;
+	pred = ABS((yhat - test_response) / test_response);
+	IF test_response = . 
+		THEN DELETE;
+	ELSE IF pred <= 0.10
+		THEN prediction_grade = 'Grade 1';
+	ELSE IF pred > 0.10 AND pred <= 0.15
+		THEN prediction_grade = 'Grade 2';
+	ELSE IF pred > 0.15
+		THEN prediction_grade = 'Grade 3';
+
+PROC FREQ DATA = forward_test_perf;
+	TABLES prediction_grade;
+
+
+
+* Backward;
+
+PROC REG DATA = ames_smpl_split OUTEST = reg_backward_out;
+	MODEL train_response = 
+	BsmtFinSF1 BsmtFinSF2 BsmtUnfSF EnclosedPorch FirstFlrSF GarageArea GrLivArea LotArea
+  	LowQualFinSF MasVnrArea MiscVal OpenPorchSF PoolArea ScreenPorch SecondFlrSF ThreeSsnPorch 
+  	TotalBsmtSF WoodDeckSF YearBuiltle70_ind YearBuilt7095_ind YearBuiltgt95_ind 
+  	BedroomAbvGrH_ind BedroomAbvGrM_ind BedroomAbvGrL_ind FullBathH_ind FullBathL_ind
+  	GarageCarsH_ind GarageCarsM_ind GarageCarsL_ind
+	/ SELECTION = backward SLSTAY = 0.10;
+RUN; QUIT;
+
+PROC PRINT DATA = reg_backward_out;
+
+PROC REG DATA = ames_smpl_split;
+	MODEL train_response = 
+	BsmtFinSF1 BsmtFinSF2 BsmtUnfSF FirstFlrSF GarageArea LotArea MasVnrArea OpenPorchSF 
+	ScreenPorch SecondFlrSF WoodDeckSF YearBuiltle70_ind YearBuilt7095_ind GarageCarsH_ind
+	/ SELECTION = ADJRSQ START = 14 STOP = 14 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = backward_train PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA backward_train_res;
+	SET backward_train;
+	res = (yhat - train_response);
+	WHERE res IS NOT MISSING;
+	mae = abs(res);
+	mse = abs(res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = backward_train_res;
+	VAR mae mse;
+
+DATA backward_train_perf;
+	SET backward_train;
+	FORMAT prediction_grade $7.;
+	pred = ABS((yhat - train_response) / train_response);
+	IF train_response = . 
+		THEN DELETE;
+	ELSE IF pred <= 0.10
+		THEN prediction_grade = 'Grade 1';
+	ELSE IF pred > 0.10 AND pred <= 0.15
+		THEN prediction_grade = 'Grade 2';
+	ELSE IF pred > 0.15
+		THEN prediction_grade = 'Grade 3';
+
+PROC FREQ DATA = forward_train_perf;
+	TABLES prediction_grade;
+
+PROC REG DATA = ames_smpl_split;
+	MODEL test_response = 
+	BsmtFinSF1 BsmtFinSF2 BsmtUnfSF FirstFlrSF GarageArea LotArea MasVnrArea OpenPorchSF 
+	ScreenPorch SecondFlrSF WoodDeckSF YearBuiltle70_ind YearBuilt7095_ind GarageCarsH_ind
+	/ SELECTION = ADJRSQ START = 14 STOP = 14 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = backward_test PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA backward_test_res;
+	SET backward_test;
+	res = (yhat - test_response);
+	WHERE res IS NOT MISSING;
+	mae = abs(res);
+	mse = abs(res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = backward_test_res;
+	VAR mae mse;
+
+DATA backward_test_perf;
+	SET backward_test;
+	FORMAT prediction_grade $7.;
+	pred = ABS((yhat - test_response) / test_response);
+	IF test_response = . 
+		THEN DELETE;
+	ELSE IF pred <= 0.10
+		THEN prediction_grade = 'Grade 1';
+	ELSE IF pred > 0.10 AND pred <= 0.15
+		THEN prediction_grade = 'Grade 2';
+	ELSE IF pred > 0.15
+		THEN prediction_grade = 'Grade 3';
+		
+PROC FREQ DATA = forward_test_perf;
+	TABLES prediction_grade;
+
+
+
+* Stepwise;
+
+PROC REG DATA = ames_smpl_split OUTEST = reg_stepwise_out;
+	MODEL train_response = 
+	BsmtFinSF1 BsmtFinSF2 BsmtUnfSF EnclosedPorch FirstFlrSF GarageArea GrLivArea LotArea
+  	LowQualFinSF MasVnrArea MiscVal OpenPorchSF PoolArea ScreenPorch SecondFlrSF ThreeSsnPorch 
+  	TotalBsmtSF WoodDeckSF YearBuiltle70_ind YearBuilt7095_ind YearBuiltgt95_ind 
+  	BedroomAbvGrH_ind BedroomAbvGrM_ind BedroomAbvGrL_ind FullBathH_ind FullBathL_ind
+  	GarageCarsH_ind GarageCarsM_ind GarageCarsL_ind
+	/ SELECTION = stepwise SLENTRY = 0.10 SLSTAY = 0.10;
+RUN; QUIT;
+
+PROC PRINT DATA = reg_stepwise_out;
+
+PROC REG DATA = ames_smpl_split;
+	MODEL train_response = 
+	BsmtFinSF2 BsmtUnfSF FirstFlrSF GarageArea GrLivArea LotArea MasVnrArea OpenPorchSF 
+	ScreenPorch TotalBsmtSF WoodDeckSF YearBuilt7095_ind YearBuiltgt95_ind GarageCarsH_ind 
+	/ SELECTION = ADJRSQ START = 14 STOP = 14 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = stepwise_train PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA stepwise_train_res;
+	SET stepwise_train;
+	res = (yhat - train_response);
+	WHERE res IS NOT MISSING;
+	mae = abs(res);
+	mse = abs(res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = stepwise_train_res;
+	VAR mae mse;
+
+DATA stepwise_train_res;
+	SET stepwise_train;
+	res = (yhat - train_response);
+	WHERE res IS NOT MISSING;
+	mae = abs(res);
+	mse = abs(res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = stepwise_train_res;
+	VAR mae mse;
+
+PROC REG DATA = ames_smpl_split;
+	MODEL test_response = 
+	BsmtFinSF2 BsmtUnfSF FirstFlrSF GarageArea GrLivArea LotArea MasVnrArea OpenPorchSF 
+	ScreenPorch TotalBsmtSF WoodDeckSF YearBuilt7095_ind YearBuiltgt95_ind GarageCarsH_ind 
+	/ SELECTION = ADJRSQ START = 14 STOP = 14 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = stepwise_test PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA stepwise_test_res;
+	SET stepwise_test;
+	res = (yhat - test_response);
+	WHERE res IS NOT MISSING;
+	mae = abs(res);
+	mse = abs(res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = stepwise_test_res;
+	VAR mae mse;
+
+~~~
+
+\newpage
+
+# References

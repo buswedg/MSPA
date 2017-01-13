@@ -1,0 +1,70 @@
+---
+title: "Solo 1 Clustering Starter"
+output:
+    html_document:
+        toc: True
+---
+
+_ _ _
+
+Copyright ©2016 Lynd Bacon & Associates, Ltd. DBA Loma Buena Associates.  All Rights Reserved.
+
+Disclaimer:  All content is provided "as is." It's not warranted to be suitable for any particular purpose.
+
+20160321a
+
+_ _ _
+
+### Ready to cluster
+
+So now you've taken a look at your attitudinal segmentation basis variables.  They are those attitudinal measures, right?  Maybe you have also decided to use some of them or all of them.  You've described the data on these variables, looked for things like missing values, limited or no variation, and so on.   Now you're ready to start some clustering.  You might first want to review Chapman and Feit's Chapter 11.
+
+### Many methods and tools in R
+
+If you look at the *Cluster Analysis & Finite Mixture Models* 'task view' on your favorite R mirror, you'll note that R makes available a dizzying array of methods and tools for doing cluster analysis.  When getting started on an application like App Happy's, many would start out with using `hclust()` from the stats package, and `kmeans()` from the cluster package.  Two main types of clustering are hierarchical clustering, and clustering by partitioning.
+
+### Chunky or smooth? The nature of the data used for cluster analysis
+
+You'll need to decide whether the data you'll cluster on are *continuous* or *discrete* measures.   If you think they are the latter, you'll probably want to transform them into distance or dissimilarity measures.  The `daisy()` function in the cluster package can do this for you.  See `help(daisy)` after making sure that the cluster package is available in your R session.  You'll want to look into using Gower's coefficient.   
+
+It can be difficult to know for sure whether it's more valid to treat data like ratings scale data as continuous or discrete.  So it's not unusual for someone clustering such data to analyze it in both ways, as continuous data, and also as discrete data that are tranformed, or by using clustering algorithm for discrete data.
+
+speaking of transformations, you may have noticed that the numerical levels assigned to the rating scale categories go from 1 = 'strongly agree' to 6 = 'strongly disaggree.'  This is somewhat counterintuitive: many people tend to assume that larger numbers should be associated with more of something, like more "agreement" in this case.  You can reverse the coding of your rating scale data by subracting the a data frame containing them from seven. For example, if you have just the 40 rating scale variables in a data frame called att.frame, you can do:
+
+```{r, eval=FALSE}
+rev.att.frame=7-att.frame
+```
+This is a simple example of the powerful "vectorizing" capability of R.  With this one statement you have subtracted every value in att.frame from the single number 7 to create a new data frame called rev.att.frame.  You didn't have to explicitly loop over the rows and columns of att.frame to do it.
+
+
+### Levels of measurement
+
+Clustering algorithms require making various assumptions about the nature of the data they are applied to.  For example, the kmeans algorithm and its variants require that it makes sense to do things like adding and multiplying the values on a variable.   S.S. Stevens described a classification of psychological measures that is the predominant perspective on social science measures today. See [Levels of Measurement](https://en.wikipedia.org/wiki/Level_of_measurement) on Wikipedia.
+
+### Deciding on the number of clusters
+
+This is often the trickier part of doing cluster analysis. And it's not unusual to find that there is no clearly superior number when clustering using ratings data or other survey data.  But there are various graphical and statistical methods that can help.   One of the tools that R provides to help you in this is the *NbClust* package, which can somewhat automate the process of finding a "best" number of clusters for you.
+
+A generic criterion for clustering result "goodness" has to do with cluster separation. The basic idea is that a good solution is one where the clusters are distinct, where they don't overlap very much.  There are different ways of looking at this.  Rob Tibshirani's slides on Canvas describe some quantitative techniques.  NbClust calculates some of the measures he reviews. A *silhouette plot* (see `help(silhouette)` in the cluster package) provides a graphical summary of cluster overlap.
+
+The number of clusters to assume is ultimately up to you.  Any clustering solution is just part of a complete segmentation solution, or "scheme," and considerations aside from clustering "goodness" will enter in to a firm's decision regarding what segementation scheme to base strategy and tactics on.  Because of the complexity of this decision, it's common for an analyst to provide decision-makers with at least a couple of different segmentation possibilities.
+
+### What clusters do survey respondents belong to?
+
+Once you've decided on one or couple of clustering results that you like, you need to to label each respondent with their cluster membership.  That is, you need to identify the cluster each respondent falls in.  You'll use your cluster membership results to *profile* your segments. Profiling segments consists of comparing them on available data to as to highlight how each segment is unique, how it differs from other segments in ways that are marketing-relevant.
+
+R clustering functions provide cluster membership labels in different ways.  `kmeans()`, for example, returns results as on object of type "kmeans" that includes a vector called "cluster" which contains integers indicating cluster membership.  Note that these values are just labels: they don't imply any ordinal or metric information.
+
+As another example, `hclust()` returns a tree, or dendrogram, of results that you use to determine how many clusters there might be in your data.  Once you've decided on this number, you can use the `cutree()` function to get assigments of respondents to clusters.
+
+A good way to figure how a clustering function returns cluster membership results is to use the `help()` function.  Try out different clustering functions as your time allows.  Note that when doing segmentation analysis you'll typically need to have a rationale for using the algorithms that you used.
+
+_ _ _
+
+Copyright ©2016 Lynd Bacon & Associates, Ltd. DBA Loma Buena Associates.  All Rights Reserved.
+
+Disclaimer:  All content is provided "as is." It's not warranted to be suitable for any particular purpose.
+
+_ _ _
+
+

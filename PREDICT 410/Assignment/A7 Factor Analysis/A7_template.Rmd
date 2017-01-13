@@ -1,0 +1,307 @@
+#---
+#output: 
+#  pdf_document:
+#    pandoc_args: [
+#      "--template=A7_template.latex",
+#      "--bibliography=A7_template.bib"
+#    ]
+#---
+# MSPA PREDICT 410-DL-58 LEC 
+# Assignment 7: Factor Analysis
+## Darryl Buswell
+
+&nbsp;
+
+# 1 Introduction
+
+This document presents results of the sevth assignment for the Masters of Science in Predictive Analytics course: PREDICT 410. For this assessment, factor analysis is used to identify sectors in the stock market.
+
+# 2 Data
+
+Load the dataset
+
+~~~{.fortran}
+LIBNAME mydata '/scs/crb519/PREDICT_410/SAS_Data/' ACCESS=readonly;
+
+DATA vv;
+	SET mydata.stock_portfolio_data;
+	DROP AA HON MMM DPS KO PEP MPC GS;
+RUN; QUIT;
+
+PROC SORT DATA=vv; BY date; RUN; QUIT;
+
+PROC CONTENTS DATA=vv ORDER=VARNUM OUT=vv_cont; RUN; QUIT;
+~~~
+
+Compute log-returns
+
+~~~{.fortran}
+DATA vv_log;
+  SET vv;
+  
+	return_BAC = log(BAC/lag1(BAC));
+	return_BHI = log(BHI/lag1(BHI));
+	return_CVX = log(CVX/lag1(CVX));
+	return_DD = log(DD/lag1(DD));
+	return_DOW = log(DOW/lag1(DOW));
+	return_HAL = log(HAL/lag1(HAL));
+	return_HES = log(HES/lag1(HES));
+	return_HUN = log(HUN/lag1(HUN));
+	return_JPM = log(JPM/lag1(JPM));
+	return_SLB = log(SLB/lag1(SLB));
+	return_WFC = log(WFC/lag1(WFC));
+	return_XOM = log(XOM/lag1(XOM));
+	
+	response_VV = log(VV/lag1(VV));
+  
+RUN; QUIT;
+  
+PROC PRINT DATA=temp(obs=10); RUN; QUIT;
+
+DATA return_data;
+  SET vv_log(keep=return_:);
+RUN; QUIT;
+
+PROC PRINT DATA=return_data(obs=10); RUN; QUIT;
+~~~
+
+# 3 Factor Analysis
+
+## 3.1 Principle Factor Analysis without Rotation
+
+~~~{.fortran}
+ODS graphics ON;
+
+PROC FACTOR DATA=return_data METHOD=principal PRIORS=smc rotate=none
+  plots=(all);
+RUN; QUIT;
+
+ODS graphics OFF;
+~~~
+
+We hypothsize that four factors will be retained, one for each sector.
+
+SAS proceedure automatically selects the number of factors to retain.
+
+Factor analysis begins by substituting the diagonal of the correlation matrix with the 'prior communality estimates'.
+
+The communality estimate for a variable is the estimate of the proportion of the variance of the variable that is both error free and shared with other variables within the matrix.
+
+SAS proceedure specified to perform communality estimate using the SMC method, which uses the squared multiple correlation between the variable and all other variables.
+
+Observe that the Prior Communality Estimates, and we notice that there are some values that are getting close to one (greater than 0.6), so the SMC method may not be appropriate.
+
+Table below shows the eigenvalues of the reduced correlation matrix.
+
+| Observation | Eigenvalue | Difference | Proportion | Cumulative |
+|-------------|------------|------------|------------|------------|
+| 1           | 6.04732583 | 5.16261770 | 0.8812     | 0.8812     |
+| 2           | 0.88470813 | 0.52262870 | 0.1289     | 1.0101     |
+| 3           | 0.36207942 | 0.05735386 | 0.0528     | 1.0629     |
+| 4           | 0.30472556 | 0.29429115 | 0.0444     | 1.1073     |
+| 5           | 0.01043441 | 0.06365245 | 0.0015     | 1.1088     |
+| 6           | -.05321803 | 0.01517115 | -0.0078    | 1.1011     |
+| 7           | -.06838918 | 0.03291807 | -0.0100    | 1.0911     |
+| 8           | -.10130725 | 0.01600696 | -0.0148    | 1.0763     |
+| 9           | -.11731422 | 0.00866270 | -0.0171    | 1.0593     |
+| 10          | -.12597692 | 0.01040221 | -0.0184    | 1.0409     |
+| 11          | -.13637913 | 0.00786652 | -0.0199    | 1.0210     |
+| 12          | -.14424565 | -          | -0.0210    | 1.0000     |
+
+First two eigenvalues carry a large proportion of the variance.
+
+This provides evidence that the variables are highly correlated.
+
+Seems to be some latent variable or trait which is driving all variables.
+
+Not sure why the sum of the first two eigenvalues is greater than one.
+
+Under the SMC method MINEIGEN is calculated as,
+
+MINEIGEN = Total Weighted Variance / Number of Variables
+
+Which in this case is equal to,
+
+MINEIGEN = 6.86 / 12 = 0.57
+
+This suggests that two factors should be retained.
+
+The table below shows the factor loadings for each variable.
+
+|            | Factor 1 | Factor 2 |
+|------------|----------|----------|
+| return_BAC | 0.68475  | 0.36021  |
+| return_BHI | 0.69984  | -0.39498 |
+| return_CVX | 0.77402  | -0.10833 |
+| return_DD  | 0.71605  | 0.16703  |
+| return_DOW | 0.64548  | 0.19801  |
+| return_HAL | 0.72630  | -0.38221 |
+| return_HES | 0.70361  | -0.15709 |
+| return_HUN | 0.58030  | 0.18186  |
+| return_JPM | 0.67874  | 0.34813  |
+| return_SLB | 0.79382  | -0.30815 |
+| return_WFC | 0.72445  | 0.30517  |
+| return_XOM | 0.76500  | -0.08361 |
+
+SAS has retained two factors under it default setting.
+
+It seems that all of the variables are highly loaded for the first factor.
+
+We can interpret the return of each stock using the shown factors, for example,
+
+return_BAC = 0.68475(Factor 1) + 0.36021(Factor 2)
+
+## 3.2 Principle Factor Analysis with VARIMAX Rotation
+
+~~~{.fortran}
+ODS graphics ON;
+
+PROC FACTOR DATA=return_data METHOD=principal PRIORS=smc rotate=varimax
+  plots=(all);
+RUN; QUIT;
+
+ODS graphics OFF;
+~~~
+
+Rotation is meant to improve the interpretability of the model.
+
+By default the unrotated output maximizes the variance accounted for by the first and subsequent factors, and forces the factors to be orthogonal.
+
+Rotation serves to make the output more understandable by seeking a 'simple structure'.
+
+This simple structure is a pattern of loadings where items load most strongly on one factor, and much more weakly on the other factors.
+
+The Varimax rotation which is an orthogonal rotation of the factor axes to maximize the variance of the squared loadings of a factor (column) on all variables (rows) in a factor matrix.
+
+The table below shows the factor loadings for each variable.
+
+|            | Factor 1 | Factor 2 |
+|------------|----------|----------|
+| return_BAC | 0.73912  | 0.22875  |
+| return_BHI | 0.21634  | 0.77394  |
+| return_CVX | 0.47133  | 0.62344  |
+| return_DD  | 0.62482  | 0.38759  |
+| return_DOW | 0.59675  | 0.31582  |
+| return_HAL | 0.24408  | 0.78359  |
+| return_HES | 0.38705  | 0.60822  |
+| return_HUN | 0.53921  | 0.28120  |
+| return_JPM | 0.72634  | 0.23305  |
+| return_SLB | 0.34419  | 0.77886  |
+| return_WFC | 0.72835  | 0.29575  |
+| return_XOM | 0.48241  | 0.59958  |
+
+The rotation has given us the ability to consider each factor as providing close to the same explanatory value for the variance within the model.
+
+Interpreting the above with a loading threshold of 0.5 allows us to see that factor 1 is comprised of BAC, DD, DOW, HUN, JPM, WFC, while factor 2 is comprised of BHI, CVX, HAL, HES, SLB, XOM.
+
+This make reification of factors under this model much easier than the previous.
+
+Factor 1 is comprised of Banking and Industrial Sectors, where as factor 2 is comprised of Oil refining and Field Services sectors.
+
+## 3.3 Maximum Likelihood Estimation Factor Analysis with VARIMAX Rotation
+
+~~~{.fortran}
+ODS graphics ON;
+
+PROC FACTOR DATA=return_data METHOD=ML PRIORS=smc rotate=varimax
+  plots=(all);
+RUN; QUIT;
+
+ODS graphics OFF;
+~~~
+
+Maximum likelihood is a formal estimation procedure that provides us with formal inference for factor loadings and goodness-of-fit criteria.
+
+Under the SMC method MINEIGEN is calculated as,
+
+MINEIGEN = Total Weighted Variance / Number of Variables
+
+Which in this case is equal to,
+
+MINEIGEN = 18.89 / 12 = 1.58
+
+This suggests that two factors should be retained.
+
+The table below shows the factor loadings for each variable.
+
+|            | Factor 1 | Factor 2 |
+|------------|----------|----------|
+| return_BAC | 0.76122  | 0.21969  |
+| return_BHI | 0.21664  | 0.79932  |
+| return_CVX | 0.49806  | 0.57530  |
+| return_DD  | 0.59542  | 0.38748  |
+| return_DOW | 0.56395  | 0.31884  |
+| return_HAL | 0.24256  | 0.80907  |
+| return_HES | 0.40289  | 0.59153  |
+| return_HUN | 0.50588  | 0.29457  |
+| return_JPM | 0.75054  | 0.22277  |
+| return_SLB | 0.35223  | 0.79376  |
+| return_WFC | 0.75994  | 0.27534  |
+| return_XOM | 0.51113  | 0.55362  |
+
+Factor loadings between principal factor analysis and maximum likelihood with rotations are very similar.
+
+Maximum likelihood provides the added benefit of a likelihood ratio test statistic which can be used to test for an appropriate amount of factors.
+
+For the above, the p-value likelihood ratio test statistic is <.0001 with the test that two factors are sufficient.
+
+## 3.4 Maximum Likelihood Estimation Factor Analysis with VARIMAX Rotation and MAX Priors
+
+~~~{.fortran}
+ODS graphics ON;
+
+PROC FACTOR DATA=return_data METHOD=ML PRIORS=max rotate=varimax
+  plots=(all);
+RUN; QUIT;
+
+ODS graphics OFF;
+~~~
+
+With MAX priors, the prior communality estimate for each variable is equal to its maximum absolute correlation.
+
+Can only imagine doing this if the correlation matrix of the original dataset is singular.
+
+Under the MAX method MINEIGEN is calculated as,
+
+MINEIGEN = Total Weighted Variance / Number of Variables
+
+Which in this case is equal to,
+
+MINEIGEN = 27.82 / 12 = 2.32
+
+The table below shows the factor loadings for each variable.
+
+|            | Factor 1 | Factor 2 | Factor 3 | Factor 4 | Factor 5 |
+|------------|----------|----------|----------|----------|----------|
+| return_BAC | 0.19300  | 0.75425  | 0.26803  | 0.17215  | 0.09285  |
+| return_BHI | 0.75597  | 0.14970  | 0.18684  | 0.24628  | -0.01722 |
+| return_CVX | 0.37688  | 0.25354  | 0.26440  | 0.70383  | 0.02658  |
+| return_DD  | 0.24372  | 0.27524  | 0.66859  | 0.31138  | -0.13337 |
+| return_DOW | 0.19396  | 0.25931  | 0.64481  | 0.23505  | -0.00701 |
+| return_HAL | 0.82071  | 0.18978  | 0.20801  | 0.16916  | -0.00609 |
+| return_HES | 0.47834  | 0.23976  | 0.25785  | 0.40900  | 0.24903  |
+| return_HUN | 0.22592  | 0.26677  | 0.60996  | 0.06709  | 0.16770  |
+| return_JPM | 0.20547  | 0.77151  | 0.22874  | 0.17842  | -0.03102 |
+| return_SLB | 0.72537  | 0.25575  | 0.24707  | 0.30301  | 0.05701  |
+| return_WFC | 0.20847  | 0.61032  | 0.35934  | 0.29285  | -0.00631 |
+| return_XOM | 0.37166  | 0.29603  | 0.24083  | 0.66560  | -0.02404 |
+
+This suggests that the factor selection is highly dependent on the prior estimates of communalities.
+
+Based on setting a loading criteria for each factor we can determine,
+
+Factor 1: BHI, HAL, SLB
+Factor 2: BAC, JPM, WFC
+Factor 3: DD, DOW, HUN
+Factor 4: CVX, XOM
+Factor 5: No selections based on loading criterion
+
+# 4 Conclusion
+
+\newpage
+
+# Appendix A SAS Procedure
+
+\newpage
+
+# References

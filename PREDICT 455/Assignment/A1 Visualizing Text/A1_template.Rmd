@@ -1,0 +1,608 @@
+---
+title: "Visualizing Text"
+subtitle: "MSPA PREDICT 455-DL-SEC55"
+author: "Darryl Buswell"
+output: 
+  pdf_document:
+    fig_caption: no
+    keep_tex: yes
+    pandoc_args: [
+      "--template=A1_template.latex",
+      "--bibliography=A1_template.bib"
+    ]
+---
+
+\newpage
+
+# 1 Introduction
+```{r, include=FALSE}
+temp_list <- c('data/R_W_Lincoln_1861.txt', 
+               'data/R_W_Lincoln_1862.txt', 
+               'data/R_W_Lincoln_1863.txt', 
+               'data/R_W_Lincoln_1864.txt')
+
+list_Lincolndata.raw <- list()
+j <- 1
+for(i in temp_list){
+  temp_data <- readLines(i, encoding='UTF-8')
+  list_Lincolndata.raw[[j]] <- temp_data
+  j <- j+1
+}
+
+temp_data <- c(list_Lincolndata.raw[[1]],
+               list_Lincolndata.raw[[2]],
+               list_Lincolndata.raw[[3]],
+               list_Lincolndata.raw[[4]])
+
+list_Lincolndata.raw <- c(list_Lincolndata.raw, list(temp_data))
+
+rm(temp_list, temp_data, i, j)
+```
+
+This assignment explores text from Abraham Lincoln's four Addresses (Addresses), with the aim to identify and compare trends in each Address using visualization techniques. Full text for each speech is available from the GitHub repository, Web and Network Data Science [@github:wnds]. Table A1 shows a summary of properties for each of the four files used. Each file is in text format, and each represents an Address made by Abraham Lincoln over the years 1861, 1862, 1863 and 1864.
+
+# 2 Data Pre-Processing
+Data was pre-processed to remove punctuation, digits, stop words and excess white space between words. This transformation resulted in retention of words with meaning which can be aggregated and analyzed. The package 'tm' was leveraged to carry out transformations and to convert the text into a 'corpus'. A separate corpus was created for each of the original datasets and for an aggregated dataset which contains text from all four or the original datasets. Table A2 summarizes each of the applied transformations, as well as the order in which they were applied.
+
+```{r, include=FALSE}
+for(package in c('tm', 'NLP', 'stringr')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+cleanCorpus <- function(corpus){
+  toASCII <- content_transformer(function(x) iconv(x, from='UTF-8', to='ASCII', sub=''))
+  toNull <- content_transformer(function(x, pattern) gsub(pattern, '', x))
+  
+  x <- corpus
+  x <- tm_map(x, toASCII)
+  x <- tm_map(x, removePunctuation)
+  x <- tm_map(x, removeNumbers)
+  x <- tm_map(x, removeWords, stopwords('english'))
+  x <- tm_map(x, content_transformer(tolower))
+  x <- tm_map(x, stripWhitespace)
+  return(x)
+}
+
+list_Lincolndata.corpus <- list()
+j <- 1
+for(i in list_Lincolndata.raw){
+  temp_corpus <- Corpus(VectorSource(i))
+  temp_corpus <- cleanCorpus(temp_corpus)
+  list_Lincolndata.corpus[[j]] <- temp_corpus 
+  j <- j+1
+}
+
+rm(cleanCorpus, temp_corpus, i, j)
+```
+
+A Term Document Matrix (TDM) was created for each corpus, which consists of a matrix of word documents against the frequency by which they appear. A separate TDM was created for single N-gram's (e.g. 'United'), two joining N-grams (e.g. 'United States'), and three joining N-grams (e.g. 'United States America'). Tokenizing over N-gram sequences facilitated the exploration of not only Lincoln's use of single words, but also the use of two and three word combinations.
+```{r, include=FALSE}
+for(package in c('tm', 'NLP', 'RWeka', 'slam')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+list_Lincolndata_unigram.dtm <- list()
+list_Lincolndata_bigram.dtm <- list()
+list_Lincolndata_trigram.dtm <- list()
+
+list_Lincolndata_unigram.tdm <- list()
+list_Lincolndata_bigram.tdm <- list()
+list_Lincolndata_trigram.tdm <- list()
+
+list_Lincolndata_unigram.df <- list()
+list_Lincolndata_bigram.df <- list()
+list_Lincolndata_trigram.df <- list()
+
+j <- 1861
+for(i in list_Lincolndata.corpus){
+  for(k in 1:3){
+    Tokenizer <- function(x) NGramTokenizer(x, Weka_control(min=k, max=k))
+    temp_dtm <- DocumentTermMatrix(i, control=list(tokenize=Tokenizer))
+    temp_tdm <- TermDocumentMatrix(i, control=list(tokenize=Tokenizer))
+    temp_freq <- rowapply_simple_triplet_matrix(temp_tdm, sum)
+    temp_dffreq <- data.frame(ngram=names(temp_freq), 
+                              freq=temp_freq,
+                              row.names=NULL,
+                              stringsAsFactors=FALSE)
+    temp_dffreq <- temp_dffreq[with(temp_dffreq, order(-freq, ngram)), ]
+    if(k == 1){
+      list_Lincolndata_unigram.dtm <- c(list_Lincolndata_unigram.dtm, list(temp_dtm))
+      save(temp_dtm, file=paste0('data/R_W_Lincoln_dtm_unigram_', j, '.RData'))
+      list_Lincolndata_unigram.tdm <- c(list_Lincolndata_unigram.tdm, list(temp_tdm))
+      save(temp_tdm, file=paste0('data/R_W_Lincoln_tdm_unigram_', j, '.RData'))
+      list_Lincolndata_unigram.df <- c(list_Lincolndata_unigram.df, list(temp_dffreq))
+      save(temp_dffreq, file=paste0('data/R_W_Lincoln_df_unigram_', j, '.RData'))
+    } else if(k == 2){
+      list_Lincolndata_bigram.dtm <- c(list_Lincolndata_bigram.tdm, list(temp_dtm))
+      save(temp_dtm, file=paste0('data/R_W_Lincoln_dtm_bigram_', j, '.RData'))
+      list_Lincolndata_bigram.tdm <- c(list_Lincolndata_bigram.tdm, list(temp_tdm))
+      save(temp_tdm, file=paste0('data/R_W_Lincoln_tdm_bigram_', j, '.RData'))
+      list_Lincolndata_bigram.df <- c(list_Lincolndata_bigram.df, list(temp_dffreq))
+      save(temp_dffreq, file=paste0('data/R_W_Lincoln_df_bigram_', j, '.RData'))
+    } else if(k == 3){
+      list_Lincolndata_trigram.dtm <- c(list_Lincolndata_trigram.dtm, list(temp_dtm))
+      save(temp_dtm, file=paste0('data/R_W_Lincoln_dtm_trigram_', j, '.RData'))
+      list_Lincolndata_trigram.tdm <- c(list_Lincolndata_trigram.tdm, list(temp_tdm))
+      save(temp_tdm, file=paste0('data/R_W_Lincoln_tdm_trigram_', j, '.RData'))
+      list_Lincolndata_trigram.df <- c(list_Lincolndata_trigram.df, list(temp_dffreq))
+      save(temp_dffreq, file=paste0('data/R_W_Lincoln_df_trigram_', j, '.RData'))
+    }
+  }
+  j <- j+1
+}
+  
+rm(Tokenizer, temp_dtm, temp_tdm, temp_freq, temp_dffreq, i, j, k)
+```
+
+Table A3 shows the number of unique N-gram occurrences within each TDM. Note that the number of unique unigrams which occur over all four Addresses is much less than the sum of unique unigrams which occur over each. This suggests that many unigram occurrences were repeated over each Address.
+
+#3 Data Exploration
+```{r, include=FALSE}
+for(package in c('wordcloud', 'RColorBrewer', 'ggplot2', 'dplyr')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+df_temp <- list_Lincolndata_unigram.df[[5]]
+
+png(filename='images/Lincolndata_unigram_wc.png', 
+    width = 800, height = 800, res = 150)
+
+#layout(matrix(c(1, 2), nrow=2), heights=c(1, 10))
+#par(mar=rep(0, 4))
+#plot.new()
+#text(x=0.5, y=0.5, 'Lincoln SoUA 1861-1864 Unigram Wordcloud')
+wordcloud(df_temp$ngram, 
+          df_temp$freq,
+          min.freq=10,
+          colors=brewer.pal(8, 'Dark2'))
+
+dev.off()
+
+png(filename='images/Lincolndata_unigram_bar.png', 
+    width = 800, height = 600, res = 150)
+
+df_temp %>% 
+  filter(freq >= 60) %>%
+  arrange(desc(freq)) %>%
+  ggplot(aes(factor(ngram, levels=unique(ngram)), freq)) +
+    geom_bar(stat='identity', fill='#56B4E9') +
+    #ggtitle('Lincoln SoUA 1861-1864 Unigrams (Frequency >= 60)') +
+    xlab('Unigrams') + 
+    ylab('N-gram Frequency') +
+    theme(axis.text.x=element_text(size=8, angle=45),
+          panel.grid.major.x = element_blank())
+
+dev.off()
+
+paste('Lincoln SoUA 1861-1864 Unigrams - Top 10 highest frequencies')
+head(df_temp, 10)
+
+df_temp <- list_Lincolndata_bigram.df[[5]]
+
+png(filename='images/Lincolndata_bigram_wc.png', 
+    width = 800, height = 800, res = 150)
+
+#layout(matrix(c(1, 2), nrow=2), heights=c(1, 10))
+#par(mar=rep(0, 4))
+#plot.new()
+#text(x=0.5, y=0.5, 'Lincoln SoUA 1861-1864 Bigram Wordcloud')
+wordcloud(df_temp$ngram, 
+          df_temp$freq,
+          min.freq=5,
+          colors=brewer.pal(8, 'Dark2'))
+
+dev.off()
+
+png(filename='images/Lincolndata_bigram_bar.png', 
+    width = 800, height = 600, res = 150)
+
+df_temp %>% 
+    filter(freq >= 9) %>%
+    ggplot(aes(factor(ngram, levels=unique(ngram)), freq)) +
+      geom_bar(stat='identity', fill='#56B4E9') +
+      #ggtitle('Lincoln SoUA 1861-1864 Bigrams (Frequency >= 9)') +
+      xlab('Bigrams') + 
+      ylab('N-gram Frequency') +
+      theme(axis.text.x=element_text(size=8, angle=45),
+            panel.grid.major.x = element_blank())
+
+dev.off()
+
+paste('Lincoln SoUA 1861-1864 Bigrams - Top 10 highest frequencies')
+head(df_temp, 10)
+
+df_temp <- list_Lincolndata_trigram.df[[5]]
+
+png(filename='images/Lincolndata_trigram_wc.png', 
+    width = 800, height = 800, res = 150)
+
+#layout(matrix(c(1, 2), nrow=2), heights=c(1, 10))
+#par(mar=rep(0, 4))
+#plot.new()
+#text(x=0.5, y=0.5, 'Lincoln SoUA 1861-1864 Trigram Wordcloud')
+wordcloud(df_temp$ngram, 
+          df_temp$freq,
+          min.freq=2,
+          colors=brewer.pal(8, 'Dark2'))
+
+dev.off()
+
+png(filename='images/Lincolndata_trigram_bar.png', 
+    width = 800, height = 600, res = 150)
+
+df_temp %>% 
+    filter(freq >= 4) %>%
+    ggplot(aes(factor(ngram, levels=unique(ngram)), freq)) +
+      geom_bar(stat='identity', fill='#56B4E9') +
+      #ggtitle('Lincoln SoUA 1861-1864 Trigrams (Frequency >= 4)') +
+      xlab('Trigrams') + 
+      ylab('N-gram Frequency') +
+      theme(axis.text.x=element_text(size=8, angle=60),
+            panel.grid.major.x = element_blank())
+
+dev.off()
+
+paste('Lincoln SoUA 1861-1864 Tigrams - Top 10 highest frequencies')
+head(df_temp, 10)
+```
+
+```{r, include=FALSE}
+uni_gram_1 <- list_Lincolndata_unigram.df[[1]][1,1]
+uni_gram_2 <- list_Lincolndata_unigram.df[[1]][2,1]
+uni_gram_3 <- list_Lincolndata_unigram.df[[1]][3,1]
+
+uni_freq_1 <- list_Lincolndata_unigram.df[[1]][1,2]
+uni_freq_2 <- list_Lincolndata_unigram.df[[1]][2,2]
+uni_freq_3 <- list_Lincolndata_unigram.df[[1]][3,2]
+
+bi_gram_1 <- list_Lincolndata_bigram.df[[1]][1,1]
+bi_gram_2 <- list_Lincolndata_bigram.df[[1]][2,1]
+bi_gram_3 <- list_Lincolndata_bigram.df[[1]][3,1]
+
+bi_freq_1 <- list_Lincolndata_bigram.df[[1]][1,2]
+bi_freq_2 <- list_Lincolndata_bigram.df[[1]][2,2]
+bi_freq_3 <- list_Lincolndata_bigram.df[[1]][3,2]
+
+tri_gram_1 <- list_Lincolndata_trigram.df[[1]][1,1]
+tri_gram_2 <- list_Lincolndata_trigram.df[[1]][2,1]
+
+tri_freq_1 <- list_Lincolndata_trigram.df[[1]][1,2]
+tri_freq_2 <- list_Lincolndata_trigram.df[[1]][2,2]
+```
+
+Frequently appearing N-grams over all four (combined) Addresses are represented as word clouds and bar plots in Figures B1 to B6. Figure B1 and B2 show that the most common unigrams over all four Addresses were '`r uni_gram_1`', '`r uni_gram_2`', and '`r uni_gram_3`', which occured `r uni_freq_1`, `r uni_freq_2`, and `r uni_freq_3` times, respectively. The most common bigram over all four Addresses was '`r bi_gram_1`', followed by '`r bi_gram_2`' and '`r bi_gram_3`'. The amount of occurrences of '`r bi_gram_1`' comes in at `r bi_freq_1`, greatly outweighing '`r bi_gram_2`' and '`r bi_gram_3`' which showed `r bi_freq_2` and `r bi_freq_3` occurrences, respectively. The most common trigrams were '`r tri_gram_1`' and '`r tri_gram_2`'.
+
+```{r, include=FALSE}
+for(package in c('wordcloud', 'RColorBrewer')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+df_temp <- Reduce(function(x, y) merge(x, y, by='ngram', all=TRUE), list_Lincolndata_unigram.df[1:4])
+colnames(df_temp) <- c('ngram', '1861', '1862', '1863', '1864')
+rownames(df_temp) <- df_temp$ngram
+df_temp$ngram <- NULL
+df_temp[is.na(df_temp)] <- 0
+
+term.matrix <- as.matrix(df_temp)
+
+png(filename='images/Lincolndata_compcloud.png', 
+    width = 800, height = 800, res = 150)
+
+#layout(matrix(c(1, 2), nrow=2), heights=c(1, 10))
+#par(mar=rep(0, 4))
+#plot.new()
+#text(x=0.5, y=0.5, 'Lincoln SoUA 1861-1864 Unigram Comparison Cloud')
+comparison.cloud(term.matrix, max.words=600, random.order=FALSE)
+
+dev.off()
+
+rm(df_temp, term.matrix)
+```
+
+Figure B7 presents a comparison word cloud which shows the year of each Address in a 2x2 grid. The unigrams occured at a high frequency across all Addresses, but occurred most frequently in the year specified in the word cloud. Some results were suprising, for example, the Battle of Fort Sumter occurred over 1861, however the highest use of the unigram 'naval' occurred during the 1863 Address. Also, the American Civil War started in 1861, yet the unigram 'war' was mentioned most often in 1864.
+
+We can relax the focus on bigrams and trigrams within each Address, and instead draw attention to correlations between each unigram. For this, we can leverage the 'biocLite' package. A visual representation of unigram correlations over all four (combined) Addresses is shown in Figure B8. A correlation threshold of 0.2 was applied to the unigram correlations and a limit was set for the number of unigrams shown. Not surprisingly, unigrams previously reported to have high frequencies are shown to have high correlations.
+```{r, include=FALSE}
+for(package in c('RWeka', 'slam')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+source('http://bioconductor.org/biocLite.R')
+biocLite('Rgraphviz')
+
+sorted_terms <- sort(col_sums(list_Lincolndata_unigram.dtm[[5]]), decreasing=TRUE)
+
+png(filename='images/Lincolndata_corrcloud.png', 
+    width = 800, height = 800, res = 150)
+
+plot(list_Lincolndata_unigram.dtm[[5]],
+     terms=names(sorted_terms[1:10]),
+     corThreshold=0.2, 
+     weighting=FALSE)
+
+dev.off()
+
+rm(sorted_terms)
+```
+
+Finally, we can use the R package 'topicmodels' to implement a Latent Dirichlet Allocation (LDA) model. The LDA can be used to classify themes within each Address. For the most part, default parameter options were used for the LDA implementation, however both the number of topics and the number of unigrams within each topic was set at four and ten respectively. The list of topics and included unigrams is shown in Table A4. It is difficult to define any of the topics based on their included unigrams, and results could not be improved by modifying either the topic count or number of included unigrams. However, applying this routine to a larger text corpus may improve the results.
+```{r, include=FALSE}
+for(package in c('topicmodels')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+dtm_temp <- list_Lincolndata_unigram.dtm[[5]]
+rowTotals <- apply(dtm_temp, 1, sum)
+dtm_temp <- dtm_temp[rowTotals> 0, ]
+
+recipes.lda=LDA(dtm_temp, 4)
+df_terms=terms(recipes.lda, 10)
+
+df_topictrend <- data.frame('1861'=numeric(), 
+                            '1862'=numeric(), 
+                            '1863'=numeric(),
+                            '1864'=numeric(), stringsAsFactors=FALSE) 
+
+for(i in 1:ncol(df_terms)){
+  temp_list <- list()
+  
+  for(j in 1:4){
+    df_temp <- data.frame(ngram=df_terms[, i])
+    df_temp <- merge(x=df_temp, 
+                     y=list_Lincolndata_unigram.df[[j]], 
+                     by='ngram', all.x=TRUE)
+    df_temp[is.na(df_temp)] <- 0
+    temp_list <- c(temp_list, sum(df_temp[,2]))
+  }
+  
+  df_temp <- as.data.frame(temp_list)
+  colnames(df_temp) <- c('1861', '1862', '1863', '1864')
+  df_topictrend <- rbind(df_topictrend, df_temp)
+}
+
+rownames(df_topictrend) <- c('Topic 1', 'Topic 2', 'Topic 3', 'Topic 4')
+
+rm(df_temp)
+```
+
+A bar plot was then used to represent how often the unigrams within each topic were referred to for each Address. Note that the proportion of use of each unigram (proportion of topic reference) was calculated by ignoring the frequency of any unigrams which are not within one of the four topics. As Figure B9 shows, the proportion of topic reference does not change radically between each Address. Do note that there was a slight increase in occurrences of unigrams within Topic 3 between the 1861 and 1862 Address, which coincided with a decrease in occurrences of unigrams within Topic 2. There was also a slight increase in occurrences of unigrams within Topic 1 between 1862 and 1863, which coincided with a decrease in occurrences of unigrams within Topic 4.
+```{r, include=FALSE}
+for(package in c('reshape2', 'ggplot2', 'plyr', 'dplyr')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+df_topictrend <- t(t(df_topictrend)/colSums(df_topictrend))*100
+df_topictrend <- melt(df_topictrend, "Row.names")
+colnames(df_topictrend) <- c('Topic', 'Address', 'Value')
+df_topictrend <- ddply(df_topictrend, 'Address', 
+                       transform, ypos = cumsum(Value) - (0.5 * Value))
+
+png(filename='images/Lincolndata_topictrend.png', 
+    width = 800, height = 800, res = 150)
+
+df_topictrend %>% 
+  ggplot(aes(x=Address, y=Value, fill=Topic)) +
+    geom_bar(stat='identity') +
+    geom_text(aes(label=round(Value,2), y=ypos), size=3) +
+    scale_fill_manual(values=c('#999999', '#E69F00', '#56B4E9', '#009E73')) +
+    #ggtitle('Lincoln SoUA 1861-1864 Topic References') +
+    xlab('State of Union Address') + 
+    ylab('Proportion of Topic Reference (%)') +
+    theme(axis.text.x=element_text(size=8),
+          panel.grid.major.x=element_blank())
+
+dev.off()
+```
+
+# 4 Conclusion
+We were able to process the dataset in order to find common unigram, bigram, and trigram frequencies, find correlations between unigrams and classify the text into topics. The powerful visualization packages within R also allowed these text transformations to be presented using a combination of wordclouds, comparison clouds, barplots, stacked barplots and correlation diagrams. For future work, it may be worth applying the same process to a larger corpus of text, potentially capturing all Addresses made over a number of administrations. Doing so may expose new trends within the underlying data and allow a wider set of inferences to be made.
+
+\newpage
+
+# Appendix A Table Output
+
+## Table A1 Dataset Summary
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+for(package in c('knitr')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+temp_data <- matrix(c('R_W_Lincoln_1861.txt',
+                      'R_W_Lincoln_1862.txt',
+                      'R_W_Lincoln_1863.txt',
+                      'R_W_Lincoln_1864.txt',
+                      round(file.info('data/R_W_Lincoln_1861.txt')$size/1024^2, 2),
+                      round(file.info('data/R_W_Lincoln_1862.txt')$size/1024^2, 2),
+                      round(file.info('data/R_W_Lincoln_1863.txt')$size/1024^2, 2),
+                      round(file.info('data/R_W_Lincoln_1864.txt')$size/1024^2, 2),
+                      length(list_Lincolndata.raw[[1]]),
+                      length(list_Lincolndata.raw[[2]]),
+                      length(list_Lincolndata.raw[[3]]),
+                      length(list_Lincolndata.raw[[4]]),
+                      max(nchar(list_Lincolndata.raw[[1]])),
+                      max(nchar(list_Lincolndata.raw[[2]])),
+                      max(nchar(list_Lincolndata.raw[[3]])),
+                      max(nchar(list_Lincolndata.raw[[4]]))),
+                    ncol=4, 
+                    byrow=FALSE)
+
+colnames(temp_data) <- c('File (name)',
+                         'Size (mb)',
+                         'Lines (no.)',
+                         'Longest Line (chars)')
+
+kable(temp_data, format='markdown')
+
+rm(temp_data)
+```
+
+## Table A2 Pre-processing Routine
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+for(package in c('knitr')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+temp_data <- matrix(c(1, 2, 3, 4, 5, 6,
+                      'Convert from UTF-8 to ASCII',
+                      'Remove punctuation', 
+                      'Remove digits', 
+                      'Remove English stopwords (e.g. to, a, is)',
+                      'Convert text to lowercase',
+                      'Strip all whitespace'),
+                    ncol=2, 
+                    byrow=FALSE)
+
+colnames(temp_data) <- c('Order',
+                         'Transformation')
+
+kable(temp_data, format='markdown')
+
+rm(temp_data)
+```
+
+## Table A3 N-gram Audit
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+for(package in c('knitr')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+temp_data <- matrix(c('Lincoln 1861',
+                      'Lincoln 1862',
+                      'Lincoln 1863',
+                      'Lincoln 1864',
+                      'Lincoln 1861-1864',
+                      nrow(list_Lincolndata_unigram.df[[1]]),
+                      nrow(list_Lincolndata_unigram.df[[2]]),
+                      nrow(list_Lincolndata_unigram.df[[3]]),
+                      nrow(list_Lincolndata_unigram.df[[4]]),
+                      nrow(list_Lincolndata_unigram.df[[5]]),
+                      nrow(list_Lincolndata_bigram.df[[1]]),
+                      nrow(list_Lincolndata_bigram.df[[2]]),
+                      nrow(list_Lincolndata_bigram.df[[3]]),
+                      nrow(list_Lincolndata_bigram.df[[4]]),
+                      nrow(list_Lincolndata_bigram.df[[5]]),
+                      nrow(list_Lincolndata_trigram.df[[1]]),
+                      nrow(list_Lincolndata_trigram.df[[2]]),
+                      nrow(list_Lincolndata_trigram.df[[3]]),
+                      nrow(list_Lincolndata_trigram.df[[4]]),
+                      nrow(list_Lincolndata_trigram.df[[5]])),
+                    ncol=4, 
+                    byrow=FALSE)
+
+colnames(temp_data) <- c('Union Address',
+                         'Unigram',
+                         'Bigram',
+                         'Trigram')
+
+kable(temp_data, format='markdown')
+
+rm(temp_data)
+```
+
+## Table A4 Topic Terms
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+kable(df_terms, format='markdown')
+```
+
+\newpage
+
+# Appendix B Figure Output
+
+## Figure B1 Lincoln SoUA 1861-1864 Unigram Wordcloud
+
+![Unigram Word Cloud](images/Lincolndata_unigram_wc.png 'Unigram Word Cloud'){#id .class height=800px}
+
+## Figure B2 Lincoln SoUA 1861-1864 Unigram (Frequency >=60)
+
+![Unigram Bar Plot](images/Lincolndata_unigram_bar.png 'Unigram Bar Plot'){#id .class height=800px} 
+
+\newpage
+
+## Figure B3 Lincoln SoUA 1861-1864 Bigram Wordcloud
+
+![Bigram Word Cloud](images/Lincolndata_bigram_wc.png 'Bigram Word Cloud'){#id .class height=800px}
+
+\vfill
+
+## Figure B4 Lincoln SoUA 1861-1864 Bigram (Frequency >=9)
+
+![Bigram Bar Plot](images/Lincolndata_bigram_bar.png 'Bigram Bar Plot'){#id .class height=800px}
+
+\newpage
+
+## Figure B5 Lincoln SoUA 1861-1864 Trigram Wordcloud
+
+![Trigram Word Cloud](images/Lincolndata_trigram_wc.png 'Trigram Word Cloud'){#id .class height=800px}
+
+\vfill
+
+## Figure B6 Lincoln SoUA 1861-1864 Trigram (Frequency >=4)
+
+![Trigram Bar Plot](images/Lincolndata_trigram_bar.png 'Unigram Bar Plot'){#id .class height=800px} 
+
+## Figure B7 Lincoln SoUA 1861-1864 Unigram Comparison Cloud
+
+![Comparison Cloud](images/Lincolndata_compcloud.png 'Comparison Cloud'){#id .class height=700px}
+
+## Figure B8 Lincoln SoUA 1861-1864 Correlation Cloud
+
+![Correlation Cloud](images/Lincolndata_corrcloud.png 'Correlation Cloud'){#id .class height=700px}
+
+## Figure B9 Lincoln SoUA 1861-1864 Topic References
+
+![Topic Trend](images/Lincolndata_topictrend.png 'Topic Trend'){#id .class height=400px width=800px}
+
+\newpage
+
+# References
+

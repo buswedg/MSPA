@@ -1,0 +1,106 @@
+* Prediction;
+
+* Principle Component Analysis;
+
+TITLE1 '';
+TITLE2 '';
+
+DATA &data._pca(DROP = &key.);
+	SET &data._trans;
+RUN; QUIT;
+
+PROC CONTENTS DATA = &data._pca OUT = &contents._pca;
+RUN; QUIT;
+
+ODS graphics ON;
+
+PROC PRINCOMP DATA = &data._pca OUT = &data._pca_out
+	PLOTS = scree(unpackpanel) N = 30;
+	ODS OUTPUT eigenvectors = pca_ev;
+RUN; QUIT;
+
+ODS graphics OFF;
+
+PROC TRANSPOSE DATA = pca_ev OUT = pca_ev_trans;
+	ID variable;
+RUN; QUIT;
+
+DATA pca_ev_score;
+	SET pca_ev_trans;
+	_TYPE_ = "SCORE";
+RUN; QUIT;
+
+DATA &data._pca_out;
+	MERGE &data._pca_out &data.(KEEP = &key.);
+RUN; QUIT;
+
+PROC CONTENTS DATA = &data._pca_out OUT = &contents._pca_out;
+RUN; QUIT;
+
+PROC MEANS DATA = &data._pca_out MIN P5 P50 P90 P95 P99 MAX MEAN STDDEV NMISS N;
+RUN; QUIT;
+
+
+* Merge Datasets;
+
+DATA &data._merged;
+	MERGE &data._flag &data._trans &data._pca_out;
+	RUN; QUIT;
+
+PROC CONTENTS DATA = &data._merged OUT = &contents._merged;
+RUN; QUIT;
+	
+PROC MEANS DATA = &data._merged MIN P5 P50 P90 P95 P99 MAX MEAN STDDEV NMISS N;
+RUN; QUIT;
+
+
+ODS TRACE ON;
+
+* Manual - Predict Response;
+
+DATA &data._scored;
+	SET &data._merged;
+	P_TARGET_WINS =
+	((80.64409) +
+	((0.24426) * Prin1) +
+	((1.74522) * Prin2) +
+	((1.449) * Prin3) +
+	((1.19577) * Prin4) +
+	((0.01219) * Prin5) +
+	((-2.26033) * Prin6) +
+	((0.54104) * Prin7) +
+	((-1.3535) * Prin8) +
+	((2.1215) * Prin9) +
+	((-0.27843) * Prin10) +
+	((-0.10821) * Prin11) +
+	((-1.41118) * Prin12) +
+	((-1.17669) * Prin13) +
+	((-1.6239) * Prin14) +
+	((-0.9432) * Prin15));
+RUN; QUIT;
+
+DATA &data._scored_trunc;
+	SET &data._scored (KEEP = &key. P_TARGET_WINS);
+	P_TARGET_WINS = max(min(P_TARGET_WINS, 120), 30);
+RUN; QUIT;
+
+DATA &data._scored_trunc;
+	SET &data._scored_trunc;
+	P_TARGET_WINS = ROUND(P_TARGET_WINS, 1);
+RUN; QUIT;
+
+PROC MEANS DATA = &data._scored_trunc NOLABELS
+    NMISS N MEAN MODE STD SKEW
+    P1 P5 P10 P25 P50 P75 P90 P95 P99 MIN MAX QRANGE;
+RUN; QUIT;
+
+PROC PRINT DATA = &data._scored_trunc;
+RUN; QUIT;
+
+PROC EXPORT DATA = &data._scored_trunc
+    OUTFILE = '/sscc/home/d/dgb2583/411/out.csv'
+    DBMS = csv
+    REPLACE;
+RUN; QUIT;
+
+ODS TRACE OFF;

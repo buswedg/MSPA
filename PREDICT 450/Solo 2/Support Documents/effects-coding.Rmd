@@ -1,0 +1,36 @@
+---
+title: "Effects Coding"
+output:
+    html_document:
+        toc: True
+---
+
+- - -
+
+&copy; Creative Commons-BY 2015 Lynd Bacon & Associates, Ltd. DBA Loma Buena Associates.
+
+Disclaimer:  All content is provided "as is." It's not warranted to be suitable for any particular purpose.
+
+20150706a
+
+_ _ _
+
+When categorical predictor variables are used in regression models, they are coded in particular ways so that it's possible to estimate regression coefficients for them.  Common coding methods include dummy coding, effects coding, and contrast coding.   We're going to use effects coding for Solo 2, but generally speaking with any approach to coding a categorical predictor you end up with one fewer coefficient estimate than the predictor has categories.  You may choose to estimate even fewer than that.
+
+Effects coding consists of coding the categories of a predictor variable into new variables where there is one less new variable than there are categories, and one category is treated as a sort of reference category.  The coded categories have values 1, 0, or -1.
+
+This kind of coding is best explained by example.  If gender is your predictor variable, for example, which has two categories, m and f, you could code it as a single predictor variable where female is coded as 1, and male as -1.  If you have a  three category “size” predictor variable, say, with levels small, medium , and large, you could code it as two predictor variables,  where medium might be coded as a 1 and a 0, large as a 0 and a 1, and small as -1 and -1.   
+
+With four categories of color, say red, yellow, green, and blue, you might code them as three "hue" predictor variables as follows:
+
+Color | hue 1 | hue 2 | hue 3
+:-----: | :-------: | :-------: | :-------:
+yellow |  1 |  0 |  0
+green  |  0 |  1 |  0
+blue |  0 |  0 |  1
+red | -1 | -1 | -1
+
+
+Using this effects coding scheme, "yellow" would be coded with hue 1 = 1, and hue 2 and hue 3 each being 0.  "red" would be coded as three -1's. If we used the above three predictors in a regression model, we'd get one estimated regression coefficient for gender, two for size, and three for color.  The categories coded with -1 will not have their own coefficient estimates as a result of fitting a model.
+
+Some software (and many R functions) will automatically generate appropriate coding for variables used in many models.  For this assignment we're going to do some R programming and create our own.

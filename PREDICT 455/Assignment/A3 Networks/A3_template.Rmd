@@ -1,0 +1,598 @@
+---
+title: "Networks"
+subtitle: "MSPA PREDICT 455-DL-SEC55"
+author: "Darryl Buswell"
+output: 
+  pdf_document:
+    fig_caption: no
+    keep_tex: yes
+    pandoc_args: [
+      "--template=A3_template.latex",
+      "--bibliography=A3_template.bib"
+    ]
+---
+
+\newpage
+
+# 1 Introduction
+
+This assignment explores text from Enron email corpus, with the aim to identify trends or anaomalies in employee communication or behaviour using network visualization techniques.
+
+# 2 Data
+
+The 'original' Enron email corpus was uploaded by William Cohen from CMU in March 2004 [@Cohen2015]. This version of the corpus contains 517,431 distinct email from 151 users. The corpus does however have a number of blank and duplicate emails as well as junk system data from email transaction failures. Jitesh Shetty and Jafar Adibi from ISI later uploaded a MySQL4 version of the corpus which attempted to fix those problems. This version of the corpus retains only selected tables with duplicate emails removed and names normalized, resulting in 252,759 emails from 151 users. For this exercise however, I have elected to use a version of the corpus provided by Schulz, which is essentially a MySQL5 version of the dataset provided by Shetty and Adibi, with some additional data cleaning [@Schulz2015].
+```{r, include=FALSE}
+#http://www.ahschulz.de/enron-email-data/
+#https://github.com/ahs85/enron/blob/master/datenmanagement.R
+
+#mysql.exe -u root -p mysql < enron-mysqldum_v5.sql
+#mysql.exe -u root -p mysql
+#show databases;
+#use mysql;
+#show tables;
+
+for(package in c('RMySQL', 'igraph', 'reshape')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+#con <- dbConnect(MySQL(), host='localhost', user='root', password='xxx', dbname='mysql')
+
+#edges <- dbGetQuery(con,
+#                    'select *, count(*) as count from
+#                      (select sender, rvalue as reciever, rtype as type, date from message as a
+#                        left join recipientinfo as b on a.mid = b.mid
+#                        where sender in (select Email_id from employeelist) 
+#                          and rvalue in (select Email_id from employeelist) 
+#                          and sender != rvalue) as x
+#                      group by sender, reciever, type;')
+
+#nodes <- dbGetQuery(con,
+#                    'select Email_id, lastName, status from employeelist;')
+
+## data management
+#edges$sender <- as.factor(edges$sender)
+#edges$reciever <- as.factor(edges$reciever)
+#edges$type <- as.factor(edges$type)
+#edges$date <- as.Date(edges$date)
+#edges$count <- as.numeric(edges$count)
+
+#nodes$status[is.na(nodes$status)] <- 'N/A'
+
+## make collapsed network
+#nodes <- nodes[order(nodes$status), ]
+#network_col <- graph.data.frame(edges, directed = T, vertices = nodes)
+
+## make expanded network
+#edges <- untable(edges[, c(1,2,3,4)], num = edges[, 5])
+#nodes <- nodes[order(nodes$status), ]
+#network_exp <- graph.data.frame(edges, directed = T, vertices = nodes)
+
+#save(edges, nodes, network_col, network_exp, file = 'data/enron.RData')
+
+#rm(con)
+```
+
+# 3 Data Exploration
+
+We are able to query the MySQL5 dataset for both a table of nodes and edges. In this case, the nodes table contains information relevant to specific Enron employees, including email address, last name and employment status. A summary of the nodes table can be found in Appendix A. The edges table on the other hand, contains records for email communication between Enron employees, including the address the email was sent from, address the email was sent to, whether the email was directly sent, or whether the recipient was CC'd or BCC'd, and the date at which the email transaction occured. A summary of the edges table can also be found in Appendix A.
+
+Using the table of nodes and edges, we are able to create an igraph network which contains the (symbolic) edge list and edge/vertex attributes. Using this network, we can create a histogram and cumulative plot of the degree of each node. In this case, the degree represents the number of emails sent to/from a particular employee. Figure B1 in Appendix B shows a histogram of node degrees, whilst Figure B2 shows the cumulative degree of each node. We can see that the majority of nodes carry a degree of 1000 or less.
+```{r, include=FALSE}
+for(package in c('igraph', 'ggplot2')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+load('data/enron.RData')
+
+#inspect data
+str(nodes)
+str(edges)
+
+# Check degree
+deg_in <- degree(network_exp, mode = 'in')
+deg_out <- degree(network_exp, mode = 'out')
+deg_all <- degree(network_exp, mode = 'all')
+
+png(filename=paste0('images/deg_freq.png'), 
+  width = 800, height = 800, res = 150)
+
+ggplot() + 
+  aes(deg_all) + 
+  geom_histogram(binwidth=100) +
+  #ggtitle('Node Degree Frequency') +
+  xlab('Degree') + 
+  ylab('Frequency') +
+  scale_x_continuous(breaks = round(seq(0, 8000, by = 1000), 1))
+
+dev.off()
+
+png(filename=paste0('images/deg_cumfreq.png'), 
+  width = 800, height = 800, res = 150)
+
+deg.dist <- degree_distribution(network_exp, cumulative = TRUE, mode = 'all')
+plot(x = 0:max(deg_all), y = 1-deg.dist, pch = 20, cex = 0.5, col = 'orange', 
+     xlab = 'Degree', 
+     ylab = 'Cumulative Frequency')
+
+dev.off()
+
+rm(deg_in, deg_out, deg_all, deg.dist)
+```
+
+We can also use the same igraph package to create a network plot of each node and their corresponding edges. We start by greating a network of the Enron email dataset, without any filters or graphical overlays. Figure B3 shows this unfiltered network. Clearly the lack of categorization and limited use of graphical overlays makes it difficult to make any inferences from this plot. Also note that this plot includes three nodes which do not have a corresponding edge.
+```{r, include=FALSE}
+for(package in c('igraph', 'gplots')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+# No filter
+n_all <- network_exp
+
+png(filename=paste0('images/n_raw.png'), 
+  width = 1600, height = 1600, res = 300)
+
+set.seed(1)
+
+plot(n_all,
+     edge.arrow.size = 0.2, 
+     edge.curved = F,
+     vertex.color = '#FFA500', 
+     vertex.frame.color = '#555555',
+     vertex.label = NA, 
+     vertex.size = 5)
+
+dev.off()
+```
+
+In order to improve the network plot, we add a filter to remove nodes which have less than one degree, add a color overlay for each node to represent the position of the employee, size each of the nodes according to its degree (greater node sizes represent a greater degree), and finally, include only emails which were sent directly to a recipient, rather than all emails which were 'CC'd' or 'BCC'd'. Figure B4 shows this filtered network. Again, it is difficult to make any inferences from this network plot. However, it does seem that those with the status 'Vice President' tend to have larger node sizes (and therefore have a greater degree).
+```{r, include=FALSE}
+for(package in c('igraph', 'RColorBrewer', 'gplots')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+# Filter: sent to, remove nodes with degree less than one, color nodes by position, size nodes by degree
+n_to <- delete_edges(network_exp, E(network_exp)[E(network_exp)$type == 'CC' | 
+                                         E(network_exp)$type == 'BCC'])
+n_to <- delete_vertices(n_to, which(degree(n_to) < 1))
+
+V(n_to)$degree <- degree(n_to, mode = 'all')
+
+vertex_col <- brewer.pal(length(unique(V(n_to)$status)), 'RdYlBu')
+V(n_to)$color <- vertex_col[factor(V(n_to)$status)]
+
+png(filename=paste0('images/n_to.png'), 
+  width = 1600, height = 1600, res = 300)
+
+set.seed(1)
+
+plot(n_to,
+     edge.arrow.size = 0.1, 
+     edge.curved = F,
+     vertex.color = V(n_to)$color, 
+     vertex.frame.color = '#555555',
+     vertex.label = NA, 
+     vertex.size = 3*log10(V(n_to)$degree))
+legend(x = -1.5, y = -1.1, 
+       unique(V(n_to)$status), 
+       pch = 21, col = vertex_col, pt.bg = vertex_col, 
+       pt.cex = 2, cex = .8, bty = 'n', ncol = 3)
+
+dev.off()
+
+rm(vertex_col)
+```
+
+To further simplify the network plot, we can be more aggressive with the degree filter and exlude those nodes which have a degree less than 200. We also color each edge according to its origin node. Figure B5 shows this filtered network. Again, it is difficult to make any inferences from this network plot, however it is slightly more obvious that those with the status 'Vice President' tend to have larger node sizes, and that nodes with this status tend to email others with the same status.
+```{r, include=FALSE}
+for(package in c('igraph', 'RColorBrewer', 'gplots')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+# Filter: sent to, remove nodes with degree less than 200, color nodes by position, size nodes by degree
+n_to_ge200 <- delete_edges(network_exp, E(network_exp)[E(network_exp)$type == 'CC' | 
+                                        E(network_exp)$type == 'BCC'])
+n_to_ge200 <- delete_vertices(n_to_ge200, which(degree(n_to_ge200) < 200))
+
+V(n_to_ge200)$degree <- degree(n_to_ge200, mode = 'all')
+
+vertex_col <- brewer.pal(length(unique(V(n_to_ge200)$status)), 'RdYlBu')
+V(n_to_ge200)$color <- vertex_col[factor(V(n_to_ge200)$status)]
+#rm(vertex_col)
+
+edge_start <- ends(n_to_ge200, es = E(n_to_ge200), names = FALSE)[,1]
+E(n_to_ge200)$color <- V(n_to_ge200)$color[edge_start]
+rm(edge_start)
+
+png(filename=paste0('images/n_to_ge200.png'), 
+  width = 1600, height = 1600, res = 300)
+
+set.seed(1)
+
+plot(n_to_ge200,
+     edge.color = E(n_to_ge200)$color, 
+     edge.arrow.size = 0.1, 
+     edge.curved = F,
+     vertex.color = V(n_to_ge200)$color, 
+     vertex.frame.color = '#555555',
+     vertex.label = NA, 
+     vertex.size = 3*log10(V(n_to_ge200)$degree))
+legend(x = -1.5, y = -1.1, 
+       unique(V(n_to_ge200)$status), 
+       pch = 21, col = vertex_col, pt.bg = vertex_col, 
+       pt.cex = 2, cex = .8, bty = 'n', ncol = 3)
+
+dev.off()
+
+rm(vertex_col)
+```
+
+In order to get an idea of how email communication at Enron changed over time, we can create a separate network graph for emails over 2000, 2001 and 2002. Do note that the dataset has significantly more emails sent over the year 2001. We retain the previously discussed filters for each of these network graphs. For each year, we also create a circle network plot in order to allow us to gain a better understanding of the communication links between each node type. These plots are shown in Figure B6 through to Figure B11. Unfortunately the spread of data makes it difficult to draw comparisons between calendar years. An interesting extension to this work may be to subset emails sent over the year 2001, by quater, and to color only edges for one or two of the node types at a time. This may provide greater insights into any observable shifts in communication patterns for each node type over time.
+```{r, include=FALSE}
+for(package in c('igraph', 'RColorBrewer', 'gplots')) {
+  if(!require(package, character.only=TRUE)) {
+    install.packages(package, repos='http://cran.us.r-project.org')
+    library(package, character.only=TRUE)
+  }
+}
+
+rm(package)
+
+# Filter: by year, remove nodes with degree less than 1, color nodes by position
+n_to_00 <- delete_edges(network_exp, E(network_exp)[E(network_exp)$type == 'CC' | 
+                                              E(network_exp)$type == 'BCC' |
+                                              E(network_exp)$date < as.Date('2000-01-01') | 
+                                              E(network_exp)$date >= as.Date('2001-01-01')])
+n_to_01 <- delete_edges(network_exp, E(network_exp)[E(network_exp)$type == 'CC' | 
+                                              E(network_exp)$type == 'BCC' |
+                                              E(network_exp)$date < as.Date('2001-01-01') | 
+                                              E(network_exp)$date >= as.Date('2002-01-01')])
+n_to_02 <- delete_edges(network_exp, E(network_exp)[E(network_exp)$type == 'CC' | 
+                                              E(network_exp)$type == 'BCC' |
+                                              E(network_exp)$date < as.Date('2002-01-01') | 
+                                              E(network_exp)$date >= as.Date('2003-01-01')])
+
+n_to_00 <- delete_vertices(n_to_00, which(degree(n_to_00) < 1))
+n_to_01 <- delete_vertices(n_to_01, which(degree(n_to_01) < 1))
+n_to_02 <- delete_vertices(n_to_02, which(degree(n_to_02) < 1))
+
+list_nm <- c('n_to_00', 'n_to_01', 'n_to_02')
+list_n <- list(n_to_00, n_to_01, n_to_02)
+
+i <- 1
+for(n in list_n){
+
+  V(n)$degree <- degree(n, mode = 'all')
+  
+  vertex_col <- brewer.pal(length(unique(V(n)$status)), 'RdYlBu')
+  V(n)$color <- vertex_col[factor(V(n)$status)]
+  #rm(vertex_col)
+  
+  edge_start <- ends(n, es = E(n), names = FALSE)[,1]
+  E(n)$color <- V(n)$color[edge_start]
+  rm(edge_start)
+  
+  png(filename=paste0('images/', list_nm[[i]], '.png'), 
+    width = 1600, height = 1600, res = 300)
+  
+  set.seed(1)
+  
+  plot(n,
+       edge.color = E(n)$color, 
+       edge.arrow.size = 0.1, 
+       edge.curved = F,
+       vertex.color = V(n)$color, 
+       vertex.frame.color = '#555555',
+       vertex.label = NA, 
+       vertex.size = 3*log10(V(n)$degree))
+  legend(x = -1.5, y = -1.1, 
+         unique(V(n_to)$status), 
+         pch = 21, col = vertex_col, pt.bg = vertex_col, 
+         pt.cex = 2, cex = .8, bty = 'n', ncol = 3)
+  
+  dev.off()
+  i <- i + 1
+}
+
+rm(vertex_col, list_nm, list_n, i, n)
+
+# Filter: circle layout, by year, remove nodes with degree less than 1, color nodes by position
+n_to_00e <- delete_edges(network_exp, E(network_exp)[E(network_exp)$type == 'CC' | 
+                                              E(network_exp)$type == 'BCC' |
+                                              E(network_exp)$date < as.Date('2000-01-01') | 
+                                              E(network_exp)$date >= as.Date('2001-01-01')])
+n_to_01e <- delete_edges(network_exp, E(network_exp)[E(network_exp)$type == 'CC' | 
+                                              E(network_exp)$type == 'BCC' |
+                                              E(network_exp)$date < as.Date('2001-01-01') | 
+                                              E(network_exp)$date >= as.Date('2002-01-01')])
+n_to_02e <- delete_edges(network_exp, E(network_exp)[E(network_exp)$type == 'CC' | 
+                                              E(network_exp)$type == 'BCC' |
+                                              E(network_exp)$date < as.Date('2002-01-01') |
+                                              E(network_exp)$date >= as.Date('2003-01-01')])
+
+n_to_00e <- delete_vertices(n_to_00e, which(degree(n_to_00e) < 1))
+n_to_01e <- delete_vertices(n_to_01e, which(degree(n_to_01e) < 1))
+n_to_02e <- delete_vertices(n_to_02e, which(degree(n_to_02e) < 1))
+
+list_nm <- c('n_to_00e', 'n_to_01e', 'n_to_02e')
+list_n <- list(n_to_00e, n_to_01e, n_to_02e)
+
+i <- 1
+for(n in list_n){
+  
+  V(n)$degree <- degree(n, mode = 'all')
+  
+  vertex_col <- brewer.pal(length(unique(V(n)$status)), 'RdYlBu')
+  V(n)$color <- vertex_col[factor(V(n)$status)]
+  #rm(vertex_col)
+  
+  edge_start <- ends(n, es = E(n), names = FALSE)[,1]
+  E(n)$color <- V(n)$color[edge_start]
+  rm(edge_start)
+  
+  png(filename=paste0('images/', list_nm[[i]], '.png'), 
+    width = 1600, height = 1600, res = 300)
+  
+  set.seed(1)
+  
+  plot(n,
+       layout = layout_in_circle(n),
+       edge.color = E(n)$color, 
+       edge.arrow.size = 0.1, 
+       edge.curved = F,
+       vertex.color = V(n)$color, 
+       vertex.frame.color = '#555555',
+       vertex.label = NA, 
+       vertex.size = 3*log10(V(n)$degree))
+  legend(x = -1.5, y = -1.1, 
+         unique(V(n_to)$status), 
+         pch = 21, col = vertex_col, pt.bg = vertex_col, 
+         pt.cex = 2, cex = .8, bty = 'n', ncol = 3)
+  
+  dev.off()
+  i <- i + 1
+}
+
+rm(vertex_col, list_nm, list_n, i, n)
+```
+
+```{r, include=FALSE}
+# Filter: heatmap, remove nodes with degree less than 200 (exclude from discussion)
+hm_ge200 <- delete_edges(network_col, E(network_col)[E(network_col)$count < 200])
+hm_ge200 <- delete_vertices(hm_ge200, which(degree(hm_ge200) < 1))
+
+hmm_ge200 <- get.adjacency(hm_ge200, attr = 'count', sparse = F)
+colnames(hmm_ge200) <- V(hm_ge200)$name
+rownames(hmm_ge200) <- V(hm_ge200)$name
+
+png(filename=paste0('images/hmm_ge200.png'), 
+  width = 800, height = 800, res = 150)
+
+set.seed(1)
+
+palf <- colorRampPalette(c('gold', 'dark orange')) 
+heatmap(hmm_ge200, Rowv = NA, Colv = NA, col = palf(100), 
+        scale='none', margins=c(10,10))
+rm(palf)
+
+dev.off()
+```
+
+To get a better idea of which individual nodes are most influential, we can apply hub and authority scores as developed by Jon Kleinberg [@Klein1999]. Nodes with a high hub score are expected to have a large number of outgoing emails while nodes with a high authority score are expected to have a large number of incoming emails. Figure B13 shows the unfiltered network plot with nodes sized according to their hub score. We can see a few nodes with a relatively large hub score and Table A3 shows the nodes with the top five hub scores. Figure B14 shows the unfiltered network plot with nodes sized according to their authority score. We also see a similar amount of nodes with a relatively high authority score and Table A4 shows the nodes with the fop five authority scores.
+```{r, include=FALSE}
+# The hubs and authorities algorithm developed by Jon Kleinberg
+# Hubs were expected to contain catalogs with a large number of outgoing links
+# Authorities would get many incoming links from hubs
+names <- array(V(network_exp)$name)
+hs <- hub_score(network_exp, weights=NA)$vector
+as <- authority_score(network_exp, weights=NA)$vector
+df_summary <- as.data.frame(list(Name = names,
+                                 Hubscore = hs, 
+                                 Authscore = as), stringsAsFactors=FALSE)
+
+
+# Filter: node size by hub score, remove nodes with degree less than one, remove nodes with degree less than one
+n_hs <- delete_vertices(network_exp, which(degree(network_exp) < 1))
+
+hs <- hub_score(n_hs, weights=NA)$vector
+
+vertex_col <- brewer.pal(length(unique(V(n_hs)$status)), 'RdYlBu')
+V(n_hs)$color <- vertex_col[factor(V(n_hs)$status)]
+rm(vertex_col)
+
+png(filename=paste0('images/n_hs.png'), 
+  width = 1600, height = 1600, res = 300)
+
+set.seed(1)
+
+plot(n_hs,
+     edge.arrow.size = 0.2, 
+     edge.curved = F,
+     vertex.color = '#FFA500', 
+     vertex.frame.color = '#555555',
+     vertex.label = NA, 
+     vertex.size = 30*hs)
+
+dev.off()
+
+#head(df_summary[with(df_summary, order(-Hubscore)), ])
+
+# Filter: node size by authority score, remove nodes with degree less than one, remove nodes with degree less than one
+n_as <- delete_vertices(network_exp, which(degree(network_exp) < 1))
+
+as <- authority_score(n_as, weights=NA)$vector
+
+vertex_col <- brewer.pal(length(unique(V(n_as)$status)), 'RdYlBu')
+V(n_as)$color <- vertex_col[factor(V(n_as)$status)]
+rm(vertex_col)
+
+png(filename=paste0('images/n_as.png'), 
+  width = 1600, height = 1600, res = 300)
+
+plot(n_as,
+     edge.arrow.size = 0.2, 
+     edge.curved = F,
+     vertex.color = '#FFA500',
+     vertex.frame.color = '#555555',
+     vertex.label = NA, 
+     vertex.size = as*30)
+
+dev.off()
+
+#head(df_summary[with(df_summary, order(-Authscore)), ])
+```
+
+# 4 Conclusion
+
+We were able to process the dataset in order to derive a network plot of emails at Enron. Although we applied a number of filtering techniques, we found it difficult to extract any meaningful insights from the plots themselves. It may be that these plots could be further improved on through alternative categorizations or by making alternative subsets. However at least for this assessment, the greatest insights were able to be made by simply applying a hub/authority metric in order to find those nodes with the greatest influence.
+
+\newpage
+
+# Appendix A Table Output
+
+### Table A1: Nodes Table Summary
+
+| Column Name | Type | Values                        |
+|-------------|------|-------------------------------|
+| Email_id    | chr  | 'albert.meyers@enron.com' ... |
+| lastName    | chr  | 'Taylor' 'Donoho' 'Gang' ...  |
+| status      | chr  | 'N/A' 'Employee' ...          |
+
+### Table A2: Edges Table Summary
+
+| Column Name | Type                 | Values                        |
+|-------------|----------------------|-------------------------------|
+| sender      | Factor w/ 144 levels | 'albert.meyers@enron.com' ... |
+| reciever    | Factor w/ 146 levels | 'albert.meyers@enron.com' ... |
+| type        | Factor w/ 3 levels   | 'BCC','CC','TO'               |
+| date        | Date                 | '2002-01-25' '2002-01-24' ... |
+
+### Table A3: Top Five Nodes Sorted by Hub Score
+
+| Node                        | Hubscore   |
+|-----------------------------|------------|
+| jeff.dasovich@enron.com     | 1.00000000 |
+| james.d.steffes@enron.com   | 0.26304852 |
+| steven.j.kean@enron.com     | 0.13700000 |
+| richard.b.sanders@enron.com | 0.10866270 |
+| mary.hain@enron.com         | 0.09921621 |
+| louise.kitchen@enron.com    | 0.02374020 |
+
+### Table A4: Top Five Nodes Sorted by Authority Score
+
+| Node                        | Authscore |
+|-----------------------------|-----------|
+| richard.shapiro@enron.com   | 1.0000000 |
+| james.d.steffes@enron.com   | 0.9994337 |
+| steven.j.kean@enron.com     | 0.7529818 |
+| richard.b.sanders@enron.com | 0.3811574 |
+| mary.hain@enron.com         | 0.1356280 |
+| robert.badeer@enron.com     | 0.1326668 |
+
+\newpage
+
+# Appendix B Figure Output
+
+### Figure B1 Degree Frequency
+
+#![Degree Frequency](images/deg_freq.png 'Degree Frequency'){#id .class height=800px}
+
+\newpage
+
+### Figure B2 Degree Cumulative Frequency
+
+#![Degree Cumulative Frequency](images/deg_cumfreq.png 'Degree Cumulative Frequency'){#id .class height=800px} 
+
+\newpage
+
+### Figure B3 Raw Network of Enron Emails
+
+#![Network of Enron Emails](images/n_raw.png 'Network of Enron Emails'){#id .class height=1200px}
+
+\newpage
+
+### Figure B4 Network of Enron Emails (Emails sent TO)
+
+#![Network of Enron Emails](images/n_to.png 'Network of Enron Emails'){#id .class height=1200px}
+
+\newpage
+
+### Figure B5 Network of Enron Emails (Greater than 200 Emails sent TO)
+
+#![Network of Enron Emails](images/n_to_ge200.png 'Network of Enron Emails'){#id .class height=1200px}
+
+\newpage
+
+### Figure B6 Network of Enron Emails (Emails sent TO over 2000)
+
+#![Network of Enron Emails](images/n_to_00.png 'Network of Enron Emails'){#id .class height=1200px}
+
+\newpage
+
+### Figure B7 Network of Enron Emails (Emails sent TO over 2000)
+
+#![Network of Enron Emails](images/n_to_00e.png 'Network of Enron Emails'){#id .class height=1200px}
+
+\newpage
+
+### Figure B8 Network of Enron Emails (Emails sent TO over 2001)
+
+#![Network of Enron Emails](images/n_to_01.png 'Network of Enron Emails'){#id .class height=1200px}
+
+\newpage
+
+### Figure B9 Network of Enron Emails (Emails sent TO over 2001)
+
+#![Network of Enron Emails](images/n_to_01e.png 'Network of Enron Emails'){#id .class height=1200px}
+
+\newpage
+
+### Figure B10 Network of Enron Emails (Emails sent TO over 2002)
+
+#![Network of Enron Emails](images/n_to_02.png 'Network of Enron Emails'){#id .class height=1200px}
+
+\newpage
+
+### Figure B11 Network of Enron Emails (Emails sent TO over 2002)
+
+#![Network of Enron Emails](images/n_to_02e.png 'Network of Enron Emails'){#id .class height=1200px}
+
+\newpage
+
+### Figure B12 Network of Enron Emails (Nodes sized by Hub Score)
+
+#![Network of Enron Emails](images/n_hs.png 'Network of Enron Emails'){#id .class height=1200px}
+
+\newpage
+
+### Figure B13 Network of Enron Emails (Nodes sized by Authority Score)
+
+#![Network of Enron Emails](images/n_as.png 'Network of Enron Emails'){#id .class height=1200px}
+
+\newpage
+
+# References

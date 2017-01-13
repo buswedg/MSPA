@@ -1,0 +1,726 @@
+* Regression;
+
+* Merge Datasets;
+
+DATA &data._merged(DROP = &key.);
+	MERGE &data._flag &data._trans &data.(KEEP = &response.);
+	&response._LN = sign(&response.) * log(abs(&response.)+1);
+	RUN; QUIT;
+
+PROC CONTENTS DATA = &data._merged OUT = &contents._merged;
+RUN; QUIT;
+	
+PROC MEANS DATA = &data._merged MIN P5 P50 P90 P95 P99 MAX MEAN STDDEV NMISS N;
+RUN; QUIT;
+	
+
+* Split for Cross-Validation;
+
+TITLE1 '';
+TITLE2 '';
+
+DATA &data._cv;
+	SET &data._merged;
+	IF cmiss(of _all_) then DELETE;
+	U = uniform(123);
+	IF (U < 0.70) then TRAIN = 1;
+		ELSE TRAIN = 0;
+	IF (U > 0.70) then TEST = 1;
+		ELSE TEST = 0;
+	IF (TRAIN = 1) then TRAIN_&response. = &response.;
+		ELSE TRAIN_&response. = .;
+	IF (TEST = 1) then TEST_&response. = &response.;
+		ELSE TEST_&response. = .;
+	IF (TRAIN = 1) then TRAIN_&response._LN = &response._LN;
+		ELSE TRAIN_&response._LN = .;
+	IF (TEST = 1) then TEST_&response._LN = &response._LN;
+		ELSE TEST_&response._LN = .;
+	DROP U;
+RUN; QUIT;
+
+PROC CONTENTS DATA = &data._cv OUT = &contents._cv;
+RUN; QUIT;
+
+PROC FREQ DATA = &data._cv;
+	TABLES train test;
+RUN; QUIT;
+
+PROC FORMAT;
+	VALUE Prediction_Grade (DEFAULT = 7)
+	. = 'Missing'
+	0.0 - 0.05 = 'Grade 0'
+	0.05 <- 0.10 = 'Grade 1'
+	0.10 <- 0.15 = 'Grade 2'
+	0.15 <- high = 'Grade 3'
+	;
+RUN;
+
+
+* AVS;
+
+TITLE1 '';
+TITLE2 '';
+
+*PROC REG DATA = &data._cv;
+*	MODEL TRAIN_&response. = 
+*	TEAM_:
+*	/ SELECTION = adjrsq BEST = 5 VIF;
+*	OUTPUT OUT = adjr_orig_train PREDICTED = yhat RESIDUAL = res;
+*RUN; QUIT;
+
+*PROC REG DATA = &data._cv;
+*	MODEL TRAIN_&response._LN = 
+*	TEAM_:
+*	/ SELECTION = adjrsq BEST = 5 VIF;
+*	OUTPUT OUT = adjr_trans_train PREDICTED = yhat RESIDUAL = res;
+*RUN; QUIT;
+
+*PROC REG DATA = &data._cv;
+*	MODEL TRAIN_&response. = 
+*	TEAM_:
+*	/ SELECTION = stepwise SLENTRY = 0.02 SLSTAY = 0.02 VIF;
+*	OUTPUT OUT = sw_orig_train PREDICTED = yhat RESIDUAL = res;
+*RUN; QUIT;
+
+*PROC REG DATA = &data._cv;
+*	MODEL TRAIN_&response._LN = 
+*	TEAM_:
+*	/ SELECTION = stepwise SLENTRY = 0.02 SLSTAY = 0.02 VIF;
+*	OUTPUT OUT = sw_trans_train PREDICTED = yhat RESIDUAL = res;
+*RUN; QUIT;
+
+
+ODS TRACE ON;
+
+* Manual - Original Response;
+
+PROC REG DATA = &data._cv;
+	MODEL TRAIN_&response. = 
+	TEAM_BATTING_H_IME
+	TEAM_BATTING_2B_IME
+	TEAM_BATTING_3B_IME
+	TEAM_BATTING_HR_IME
+	TEAM_BATTING_BB_IME
+	TEAM_BATTING_SO_IME
+	TEAM_BASERUN_SB_IME
+	TEAM_PITCHING_H_IME
+	TEAM_FIELDING_E_IME
+
+	TEAM_BATTING_SO_MF
+	TEAM_BASERUN_SB_MF
+
+	TEAM_BATTING_3B_OF
+	TEAM_PITCHING_H_OF
+	TEAM_FIELDING_E_OF
+	/ SELECTION = adjrsq START = 14 STOP = 14 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = manual_orig_train PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA manual_orig_train_res;
+	SET manual_orig_train;
+	res = (TRAIN_&response. - yhat);
+	WHERE res IS NOT missing;
+	abs_res = abs(res);
+	square_res = (res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = manual_orig_train_res mean nway nmiss;
+	VAR abs_res square_res;
+	OUTPUT out = manual_orig_train_em
+	mean(abs_res) = MAE
+	mean(square_res) = MSE;
+RUN; QUIT;
+
+PROC PRINT DATA = manual_orig_train_em;
+RUN; QUIT;
+
+DATA manual_orig_train_ov;
+	SET manual_orig_train;
+	OV = abs(((yhat-TRAIN_&response.)/TRAIN_&response.));
+	Prediction_Grade = put(OV, Prediction_Grade.);
+	IF Prediction_Grade = 'Missing' then DELETE;
+RUN; QUIT;
+
+PROC FREQ DATA = manual_orig_train_ov;
+	TABLES Prediction_Grade;
+	TITLE1 'Operational Validation of &response.';
+RUN; QUIT;
+
+PROC REG DATA = &data._cv;
+	MODEL TEST_&response. = 
+	TEAM_BATTING_H_IME
+	TEAM_BATTING_2B_IME
+	TEAM_BATTING_3B_IME
+	TEAM_BATTING_HR_IME
+	TEAM_BATTING_BB_IME
+	TEAM_BATTING_SO_IME
+	TEAM_BASERUN_SB_IME
+	TEAM_PITCHING_H_IME
+	TEAM_FIELDING_E_IME
+
+	TEAM_BATTING_SO_MF
+	TEAM_BASERUN_SB_MF
+
+	TEAM_BATTING_3B_OF
+	TEAM_PITCHING_H_OF
+	TEAM_FIELDING_E_OF
+	/ SELECTION = adjrsq START = 14 STOP = 14 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = manual_orig_test PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA manual_orig_test_res;
+	SET manual_orig_test;
+	res = (TEST_&response. - yhat);
+	WHERE res IS NOT missing;
+	abs_res = abs(res);
+	square_res = (res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = manual_orig_test_res mean nway nmiss;
+	VAR abs_res square_res;
+	OUTPUT out = manual_orig_test_em
+	mean(abs_res) = MAE
+	mean(square_res) = MSE;
+RUN; QUIT;
+
+PROC PRINT DATA = manual_orig_test_em;
+RUN; QUIT;
+
+DATA manual_orig_test_ov;
+	SET manual_orig_test;
+	OV = abs(((yhat-TEST_&response.)/TEST_&response.));
+	Prediction_Grade = put(OV, Prediction_Grade.);
+	IF Prediction_Grade = 'Missing' then DELETE;
+RUN; QUIT;
+
+PROC FREQ DATA = manual_orig_test_ov;
+	TABLES Prediction_Grade;
+	TITLE1 'Operational Validation of &response.';
+RUN; QUIT;
+
+
+* Manual - Transformed Response;
+
+PROC REG DATA = &data._cv;
+	MODEL TRAIN_&response._LN = 
+	TEAM_BATTING_H_IME_LN
+	TEAM_BATTING_2B_IME_LN
+	TEAM_BATTING_3B_IME_LN
+	TEAM_BATTING_HR_IME_LN
+	TEAM_BATTING_BB_IME_LN
+	TEAM_BASERUN_SB_IME_LN
+	TEAM_PITCHING_H_IME_LN
+	TEAM_FIELDING_E_IME_LN
+
+	TEAM_BATTING_SO_MF
+	TEAM_BASERUN_SB_MF
+
+	TEAM_BATTING_3B_OF
+	TEAM_BASERUN_SB_OF
+	TEAM_PITCHING_H_OF
+	TEAM_FIELDING_E_OF
+	/ SELECTION = adjrsq START = 14 STOP = 14 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = manual_trans_train PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA manual_trans_train_res;
+	SET manual_trans_train;
+	res = (TRAIN_&response._LN - yhat);
+	WHERE res IS NOT missing;
+	abs_res = abs(res);
+	square_res = (res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = manual_trans_train_res mean nway nmiss;
+	VAR abs_res square_res;
+	OUTPUT out = manual_trans_train_em
+	mean(abs_res) = MAE
+	mean(square_res) = MSE;
+RUN; QUIT;
+
+PROC PRINT DATA = manual_trans_train_em;
+RUN; QUIT;
+
+DATA manual_trans_train_ov;
+	SET manual_trans_train;
+	OV = abs(((yhat-TRAIN_&response._LN)/TRAIN_&response._LN));
+	Prediction_Grade = put(OV, Prediction_Grade.);
+	IF Prediction_Grade = 'Missing' then DELETE;
+RUN; QUIT;
+
+PROC FREQ DATA = manual_trans_train_ov;
+	TABLES Prediction_Grade;
+	TITLE1 'Operational Validation of &response.';
+RUN; QUIT;
+
+PROC REG DATA = &data._cv;
+	MODEL TEST_&response._LN = 
+	TEAM_BATTING_H_IME_LN
+	TEAM_BATTING_2B_IME_LN
+	TEAM_BATTING_3B_IME_LN
+	TEAM_BATTING_HR_IME_LN
+	TEAM_BATTING_BB_IME_LN
+	TEAM_BASERUN_SB_IME_LN
+	TEAM_PITCHING_H_IME_LN
+	TEAM_FIELDING_E_IME_LN
+
+	TEAM_BATTING_SO_MF
+	TEAM_BASERUN_SB_MF
+
+	TEAM_BATTING_3B_OF
+	TEAM_BASERUN_SB_OF
+	TEAM_PITCHING_H_OF
+	TEAM_FIELDING_E_OF
+	/ SELECTION = adjrsq START = 14 STOP = 14 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = manual_trans_test PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA manual_trans_test_res;
+	SET manual_trans_test;
+	res = (TEST_&response._LN - yhat);
+	WHERE res IS NOT missing;
+	abs_res = abs(res);
+	square_res = (res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = manual_trans_test_res mean nway nmiss;
+	VAR abs_res square_res;
+	OUTPUT out = manual_trans_test_em
+	mean(abs_res) = MAE
+	mean(square_res) = MSE;
+RUN; QUIT;
+
+PROC PRINT DATA = manual_trans_test_em;
+RUN; QUIT;
+
+DATA manual_trans_test_ov;
+	SET manual_trans_test;
+	OV = abs(((yhat-TEST_&response._LN)/TEST_&response._LN));
+	Prediction_Grade = put(OV, Prediction_Grade.);
+	IF Prediction_Grade = 'Missing' then DELETE;
+RUN; QUIT;
+
+PROC FREQ DATA = manual_trans_test_ov;
+	TABLES Prediction_Grade;
+	TITLE1 'Operational Validation of &response.';
+RUN; QUIT;
+
+
+* AVS: Adjrsq - Original Response;
+
+PROC REG DATA = &data._cv;
+	MODEL TRAIN_&response. = 
+	TEAM_BASERUN_CS_OF
+	TEAM_BASERUN_SB_MF
+	TEAM_BATTING_SO_MF
+	TEAM_FIELDING_DP_MF
+	TEAM_BASERUN_SB_IME
+	TEAM_BATTING_2B_T99_IME
+	TEAM_BATTING_3B_T99_IME
+	TEAM_BATTING_BB_IME
+	TEAM_BATTING_H_IME
+	TEAM_PITCHING_HR_IME
+	TEAM_PITCHING_SO_T99_IME
+	TEAM_BATTING_2B_T99_IME_LN
+	TEAM_BATTING_H_T99_IME_LN
+	TEAM_FIELDING_DP_IME_LN
+	TEAM_FIELDING_E_IME_LN
+	TEAM_PITCHING_SO_T99_IME_LN
+	/ SELECTION = adjrsq START = 16 STOP = 16 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = adjrsq_orig_train PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA adjrsq_orig_train_res;
+	SET adjrsq_orig_train;
+	res = (TRAIN_&response. - yhat);
+	WHERE res IS NOT missing;
+	abs_res = abs(res);
+	square_res = (res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = adjrsq_orig_train_res mean nway nmiss;
+	VAR abs_res square_res;
+	OUTPUT out = adjrsq_orig_train_em
+	mean(abs_res) = MAE
+	mean(square_res) = MSE;
+RUN; QUIT;
+
+PROC PRINT DATA = adjrsq_orig_train_em;
+RUN; QUIT;
+
+DATA adjrsq_orig_train_ov;
+	SET adjrsq_orig_train;
+	OV = abs(((yhat-TRAIN_&response.)/TRAIN_&response.));
+	Prediction_Grade = put(OV, Prediction_Grade.);
+	IF Prediction_Grade = 'Missing' then DELETE;
+RUN; QUIT;
+
+PROC FREQ DATA = adjrsq_orig_train_ov;
+	TABLES Prediction_Grade;
+	TITLE1 'Operational Validation of &response.';
+RUN; QUIT;
+
+PROC REG DATA = &data._cv;
+	MODEL TEST_&response. = 
+	TEAM_BASERUN_CS_OF
+	TEAM_BASERUN_SB_MF
+	TEAM_BATTING_SO_MF
+	TEAM_FIELDING_DP_MF
+	TEAM_BASERUN_SB_IME
+	TEAM_BATTING_2B_T99_IME
+	TEAM_BATTING_3B_T99_IME
+	TEAM_BATTING_BB_IME
+	TEAM_BATTING_H_IME
+	TEAM_PITCHING_HR_IME
+	TEAM_PITCHING_SO_T99_IME
+	TEAM_BATTING_2B_T99_IME_LN
+	TEAM_BATTING_H_T99_IME_LN
+	TEAM_FIELDING_DP_IME_LN
+	TEAM_FIELDING_E_IME_LN
+	TEAM_PITCHING_SO_T99_IME_LN
+	/ SELECTION = adjrsq START = 16 STOP = 16 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = adjrsq_orig_test PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA adjrsq_orig_test_res;
+	SET adjrsq_orig_test;
+	res = (TEST_&response. - yhat);
+	WHERE res IS NOT missing;
+	abs_res = abs(res);
+	square_res = (res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = adjrsq_orig_test_res mean nway nmiss;
+	VAR abs_res square_res;
+	OUTPUT out = adjrsq_orig_test_em
+	mean(abs_res) = MAE
+	mean(square_res) = MSE;
+RUN; QUIT;
+
+PROC PRINT DATA = adjrsq_orig_test_em;
+RUN; QUIT;
+
+DATA adjrsq_orig_test_ov;
+	SET adjrsq_orig_test;
+	OV = abs(((yhat-TEST_&response.)/TEST_&response.));
+	Prediction_Grade = put(OV, Prediction_Grade.);
+	IF Prediction_Grade = 'Missing' then DELETE;
+RUN; QUIT;
+
+PROC FREQ DATA = adjrsq_orig_test_ov;
+	TABLES Prediction_Grade;
+	TITLE1 'Operational Validation of &response.';
+RUN; QUIT;
+
+
+* AVS: Adjrsq - Transformed Response;
+
+PROC REG DATA = &data._cv;
+	MODEL TRAIN_&response._LN = 
+	TEAM_BASERUN_SB_MF
+	TEAM_BATTING_SO_MF
+	TEAM_BASERUN_SB_IME
+	TEAM_BATTING_2B_T99_IME
+	TEAM_BATTING_3B_T99_IME
+	TEAM_BATTING_SO_IME
+	TEAM_PITCHING_BB_IME
+	TEAM_PITCHING_HR_T99_IME
+	TEAM_BATTING_2B_T99_IME_LN
+	TEAM_BATTING_BB_IME_LN
+	TEAM_BATTING_H_IME_LN
+	TEAM_BATTING_H_T99_IME_LN
+	TEAM_FIELDING_DP_IME_LN
+	TEAM_FIELDING_E_IME_LN
+	TEAM_PITCHING_BB_IME_LN
+	TEAM_PITCHING_H_IME_LN
+	/ SELECTION = adjrsq START = 16 STOP = 16 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = adjrsq_trans_train PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA adjrsq_trans_train_res;
+	SET adjrsq_trans_train;
+	res = (TRAIN_&response._LN - yhat);
+	WHERE res IS NOT missing;
+	abs_res = abs(res);
+	square_res = (res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = adjrsq_trans_train_res mean nway nmiss;
+	VAR abs_res square_res;
+	OUTPUT out = adjrsq_trans_train_em
+	mean(abs_res) = MAE
+	mean(square_res) = MSE;
+RUN; QUIT;
+
+PROC PRINT DATA = adjrsq_trans_train_em;
+RUN; QUIT;
+
+DATA adjrsq_trans_train_ov;
+	SET adjrsq_trans_train;
+	OV = abs(((yhat-TRAIN_&response._LN)/TRAIN_&response._LN));
+	Prediction_Grade = put(OV, Prediction_Grade.);
+	IF Prediction_Grade = 'Missing' then DELETE;
+RUN; QUIT;
+
+PROC FREQ DATA = adjrsq_trans_train_ov;
+	TABLES Prediction_Grade;
+	TITLE1 'Operational Validation of &response.';
+RUN; QUIT;
+
+PROC REG DATA = &data._cv;
+	MODEL TEST_&response._LN = 
+	TEAM_BASERUN_SB_MF
+	TEAM_BATTING_SO_MF
+	TEAM_BASERUN_SB_IME
+	TEAM_BATTING_2B_T99_IME
+	TEAM_BATTING_3B_T99_IME
+	TEAM_BATTING_SO_IME
+	TEAM_PITCHING_BB_IME
+	TEAM_PITCHING_HR_T99_IME
+	TEAM_BATTING_2B_T99_IME_LN
+	TEAM_BATTING_BB_IME_LN
+	TEAM_BATTING_H_IME_LN
+	TEAM_BATTING_H_T99_IME_LN
+	TEAM_FIELDING_DP_IME_LN
+	TEAM_FIELDING_E_IME_LN
+	TEAM_PITCHING_BB_IME_LN
+	TEAM_PITCHING_H_IME_LN
+	/ SELECTION = adjrsq START = 16 STOP = 16 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = adjrsq_trans_test PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA adjrsq_trans_test_res;
+	SET adjrsq_trans_test;
+	res = (TEST_&response._LN - yhat);
+	WHERE res IS NOT missing;
+	abs_res = abs(res);
+	square_res = (res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = adjrsq_trans_test_res mean nway nmiss;
+	VAR abs_res square_res;
+	OUTPUT out = adjrsq_trans_test_em
+	mean(abs_res) = MAE
+	mean(square_res) = MSE;
+RUN; QUIT;
+
+PROC PRINT DATA = adjrsq_trans_test_em;
+RUN; QUIT;
+
+DATA adjrsq_trans_test_ov;
+	SET adjrsq_trans_test;
+	OV = abs(((yhat-TEST_&response._LN)/TEST_&response._LN));
+	Prediction_Grade = put(OV, Prediction_Grade.);
+	IF Prediction_Grade = 'Missing' then DELETE;
+RUN; QUIT;
+
+PROC FREQ DATA = adjrsq_trans_test_ov;
+	TABLES Prediction_Grade;
+	TITLE1 'Operational Validation of &response.';
+RUN; QUIT;
+
+
+* AVS: Stepwise - Original Response;
+
+PROC REG DATA = &data._cv;
+	MODEL TRAIN_&response. = 
+	TEAM_BASERUN_CS_OF
+	TEAM_BASERUN_SB_IME
+	TEAM_BASERUN_SB_MF
+	TEAM_BATTING_3B_T99_IME
+	TEAM_BATTING_BB_IME
+	TEAM_BATTING_H_IME
+	TEAM_BATTING_H_T99_IME
+	TEAM_BATTING_SO_IME
+	TEAM_BATTING_SO_MF
+	TEAM_FIELDING_DP_IME_LN
+	TEAM_FIELDING_DP_OF
+	TEAM_FIELDING_E_IME_LN
+	TEAM_PITCHING_BB_T99_IME_LN
+	TEAM_PITCHING_HR_T99_IME
+	/ SELECTION = adjrsq START = 14 STOP = 14 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = sw_orig_train PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA sw_orig_train_res;
+	SET sw_orig_train;
+	res = (TRAIN_&response. - yhat);
+	WHERE res IS NOT missing;
+	abs_res = abs(res);
+	square_res = (res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = sw_orig_train_res mean nway nmiss;
+	VAR abs_res square_res;
+	OUTPUT out = sw_orig_train_em
+	mean(abs_res) = MAE
+	mean(square_res) = MSE;
+RUN; QUIT;
+
+PROC PRINT DATA = sw_orig_train_em;
+RUN; QUIT;
+
+DATA sw_orig_train_ov;
+	SET sw_orig_train;
+	OV = abs(((yhat-TRAIN_&response.)/TRAIN_&response.));
+	Prediction_Grade = put(OV, Prediction_Grade.);
+	IF Prediction_Grade = 'Missing' then DELETE;
+RUN; QUIT;
+
+PROC FREQ DATA = sw_orig_train_ov;
+	TABLES Prediction_Grade;
+	TITLE1 'Operational Validation of &response.';
+RUN; QUIT;
+
+PROC REG DATA = &data._cv;
+	MODEL TEST_&response. = 
+	TEAM_BASERUN_CS_OF
+	TEAM_BASERUN_SB_IME
+	TEAM_BASERUN_SB_MF
+	TEAM_BATTING_3B_T99_IME
+	TEAM_BATTING_BB_IME
+	TEAM_BATTING_H_IME
+	TEAM_BATTING_H_T99_IME
+	TEAM_BATTING_SO_IME
+	TEAM_BATTING_SO_MF
+	TEAM_FIELDING_DP_IME_LN
+	TEAM_FIELDING_DP_OF
+	TEAM_FIELDING_E_IME_LN
+	TEAM_PITCHING_BB_T99_IME_LN
+	TEAM_PITCHING_HR_T99_IME
+	/ SELECTION = adjrsq START = 14 STOP = 14 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = sw_orig_test PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA sw_orig_test_res;
+	SET sw_orig_test;
+	res = (TEST_&response. - yhat);
+	WHERE res IS NOT missing;
+	abs_res = abs(res);
+	square_res = (res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = sw_orig_test_res mean nway nmiss;
+	VAR abs_res square_res;
+	OUTPUT out = sw_orig_test_em
+	mean(abs_res) = MAE
+	mean(square_res) = MSE;
+RUN; QUIT;
+
+PROC PRINT DATA = sw_orig_test_em;
+RUN; QUIT;
+
+DATA sw_orig_test_ov;
+	SET sw_orig_test;
+	OV = abs(((yhat-TEST_&response.)/TEST_&response.));
+	Prediction_Grade = put(OV, Prediction_Grade.);
+	IF Prediction_Grade = 'Missing' then DELETE;
+RUN; QUIT;
+
+PROC FREQ DATA = sw_orig_test_ov;
+	TABLES Prediction_Grade;
+	TITLE1 'Operational Validation of &response.';
+RUN; QUIT;
+
+
+* AVS: Stepwise - Transformed Response;
+
+PROC REG DATA = &data._cv;
+	MODEL TRAIN_&response._LN = 
+	TEAM_BASERUN_CS_OF
+	TEAM_BASERUN_SB_IME
+	TEAM_BASERUN_SB_MF
+	TEAM_BATTING_3B_T99_IME
+	TEAM_BATTING_BB_OF
+	TEAM_BATTING_H_IME_LN
+	TEAM_BATTING_H_T99_IME_LN
+	TEAM_BATTING_SO_MF
+	TEAM_FIELDING_DP_IME_LN
+	TEAM_FIELDING_DP_MF
+	TEAM_FIELDING_E_T99_IME_LN
+	TEAM_PITCHING_H_OF
+	TEAM_PITCHING_HR_T99_IME
+	/ SELECTION = adjrsq START = 13 STOP = 13 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = sw_trans_train PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA sw_trans_train_res;
+	SET sw_trans_train;
+	res = (TRAIN_&response._LN - yhat);
+	WHERE res IS NOT missing;
+	abs_res = abs(res);
+	square_res = (res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = sw_trans_train_res mean nway nmiss;
+	VAR abs_res square_res;
+	OUTPUT out = sw_trans_train_em
+	mean(abs_res) = MAE
+	mean(square_res) = MSE;
+RUN; QUIT;
+
+PROC PRINT DATA = sw_trans_train_em;
+RUN; QUIT;
+
+DATA sw_trans_train_ov;
+	SET sw_trans_train;
+	OV = abs(((yhat-TRAIN_&response._LN)/TRAIN_&response._LN));
+	Prediction_Grade = put(OV, Prediction_Grade.);
+	IF Prediction_Grade = 'Missing' then DELETE;
+RUN; QUIT;
+
+PROC FREQ DATA = sw_trans_train_ov;
+	TABLES Prediction_Grade;
+	TITLE1 'Operational Validation of &response.';
+RUN; QUIT;
+
+PROC REG DATA = &data._cv;
+	MODEL TEST_&response._LN = 
+	TEAM_BASERUN_CS_OF
+	TEAM_BASERUN_SB_IME
+	TEAM_BASERUN_SB_MF
+	TEAM_BATTING_3B_T99_IME
+	TEAM_BATTING_BB_OF
+	TEAM_BATTING_H_IME_LN
+	TEAM_BATTING_H_T99_IME_LN
+	TEAM_BATTING_SO_MF
+	TEAM_FIELDING_DP_IME_LN
+	TEAM_FIELDING_DP_MF
+	TEAM_FIELDING_E_T99_IME_LN
+	TEAM_PITCHING_H_OF
+	TEAM_PITCHING_HR_T99_IME
+	/ SELECTION = adjrsq START = 13 STOP = 13 MSE ADJRSQ AIC BIC CP VIF;
+	OUTPUT OUT = sw_trans_test PREDICTED = yhat RESIDUAL = res;
+RUN; QUIT;
+
+DATA sw_trans_test_res;
+	SET sw_trans_test;
+	res = (TEST_&response._LN - yhat);
+	WHERE res IS NOT missing;
+	abs_res = abs(res);
+	square_res = (res**2);
+RUN; QUIT;
+
+PROC MEANS DATA = sw_trans_test_res mean nway nmiss;
+	VAR abs_res square_res;
+	OUTPUT out = sw_trans_test_em
+	mean(abs_res) = MAE
+	mean(square_res) = MSE;
+RUN; QUIT;
+
+PROC PRINT DATA = sw_trans_test_em;
+RUN; QUIT;
+
+DATA sw_trans_test_ov;
+	SET sw_trans_test;
+	OV = abs(((yhat-TEST_&response._LN)/TEST_&response._LN));
+	Prediction_Grade = put(OV, Prediction_Grade.);
+	IF Prediction_Grade = 'Missing' then DELETE;
+RUN; QUIT;
+
+PROC FREQ DATA = sw_trans_test_ov;
+	TABLES Prediction_Grade;
+	TITLE1 'Operational Validation of &response.';
+RUN; QUIT;
+
+ODS TRACE OFF;
